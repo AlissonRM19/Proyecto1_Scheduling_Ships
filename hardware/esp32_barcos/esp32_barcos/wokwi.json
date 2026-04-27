@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "author": "Anonymous maker",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-c6-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": -80,
+      "left": -140,
+      "attrs": { "color": "green", "xray": "1" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn2",
+      "top": -40,
+      "left": -140,
+      "attrs": { "color": "red", "xray": "1" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn3",
+      "top": 0,
+      "left": -140,
+      "attrs": { "color": "blue", "xray": "1" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn4",
+      "top": -80,
+      "left": 140,
+      "attrs": { "color": "yellow", "xray": "1" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn5",
+      "top": -40,
+      "left": 140,
+      "attrs": { "color": "orange", "xray": "1" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn6",
+      "top": 0,
+      "left": 140,
+      "attrs": { "color": "purple", "xray": "1" }
+    }
+  ],
+  "connections": [
+    ["esp:TX", "$serialMonitor:RX", "", []],
+    ["esp:RX", "$serialMonitor:TX", "", []],
+    ["btn1:2.r", "esp:4", "green", ["h66.3", "v-33.6"]],
+    ["btn2:2.r", "esp:5", "green", ["h66.3", "v6.4"]],
+    ["btn3:2.r", "esp:6", "green", ["h66.3", "v46.4"]],
+    ["btn4:2.r", "esp:7", "green", ["h-66.3", "v-33.6"]],
+    ["btn5:2.r", "esp:8", "green", ["h-66.3", "v6.4"]],
+    ["btn6:2.r", "esp:10", "green", ["h-66.3", "v46.4"]],
+    ["btn1:1.l", "esp:GND.1", "green", ["h19.6", "v68.2", "h137.0"]],
+    ["btn2:1.l", "esp:GND.1", "green", ["h19.6", "v68.2", "h137.0"]],
+    ["btn3:1.l", "esp:GND.1", "green", ["h19.6", "v68.2", "h137.0"]],
+    ["btn4:1.l", "esp:GND.1", "green", ["h-19.6", "v68.2", "h-137.0"]],
+    ["btn5:1.l", "esp:GND.1", "green", ["h-19.6", "v68.2", "h-137.0"]],
+    ["btn6:1.l", "esp:GND.1", "green", ["h-19.6", "v68.2", "h-137.0"]]
+  ],
+  "dependencies": {}
+}
