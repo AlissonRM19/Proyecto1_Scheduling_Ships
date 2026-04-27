@@ -10,6 +10,15 @@ struct Barco {
   int prioridad;
 };
 
+
+//======= PINES BOTONES======
+const int botonIzquierda = 4;
+const int botonDerecha = 5;
+
+// === Control IDs=====
+
+int contadorBarcos = 1;
+
 // ===== FUNCIONES AUXILIARES =====
 
 String nombreTipo(int tipo) {
@@ -50,12 +59,33 @@ void barcoTask(void *pvParameters) {
 
   // Simulación continua
   while (true) {
-    Serial.print("Barco ");
-    Serial.print(barco->id);
-    Serial.println(" esperando turno...");
+    String mensaje = "Barco " + String(barco->id) + " esperando turno...";
+    Serial.println(mensaje);
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
+}
+
+//========Funcion para crear barcos ===========
+
+void crearBarco(int lado) {
+  // Reservar memoria dinámica
+  Barco *nuevoBarco = new Barco;
+
+  nuevoBarco->id = contadorBarcos++;
+  nuevoBarco->tipo = 1; // por ahora todos Normal
+  nuevoBarco->lado = lado;
+  nuevoBarco->tiempoCruce = 5;
+  nuevoBarco->prioridad = 1;
+
+  xTaskCreate(
+    barcoTask,
+    "Barco",
+    2048,
+    nuevoBarco,
+    nuevoBarco->prioridad,
+    NULL
+  );
 }
 
 // ===== SETUP =====
@@ -64,74 +94,34 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
+  pinMode(botonIzquierda, INPUT_PULLUP);
+  pinMode(botonDerecha, INPUT_PULLUP);
+
   Serial.println();
   Serial.println("=================================");
-  Serial.println("INICIANDO SCHEDULING SHIPS");
-  Serial.println("ESP32-C6 + FreeRTOS");
+  Serial.println("SCHEDULING SHIPS");
+  Serial.println("Presione botones para crear barcos");
+  Serial.println("Botón GPIO 4 -> Izquierda");
+  Serial.println("Botón GPIO 5 -> Derecha");
   Serial.println("=================================");
-
-  // ===== CREACIÓN DE BARCOS =====
-
-  // static evita problemas de memoria con FreeRTOS
-
-  static Barco barco1 = {
-    1,  // ID
-    1,  // Normal
-    0,  // Izquierda
-    5,  // Tiempo cruce
-    1   // Prioridad
-  };
-
-  static Barco barco2 = {
-    2,  // ID
-    3,  // Patrulla
-    1,  // Derecha
-    2,  // Tiempo cruce
-    3   // Prioridad
-  };
-
-  static Barco barco3 = {
-    3,  // ID
-    2,  // Pesquero
-    0,  // Izquierda
-    3,  // Tiempo cruce
-    2   // Prioridad
-  };
-
-  // ===== CREAR TASKS =====
-
-  xTaskCreate(
-    barcoTask,
-    "Barco1",
-    2048,
-    &barco1,
-    barco1.prioridad,
-    NULL
-  );
-
-  xTaskCreate(
-    barcoTask,
-    "Barco2",
-    2048,
-    &barco2,
-    barco2.prioridad,
-    NULL
-  );
-
-  xTaskCreate(
-    barcoTask,
-    "Barco3",
-    2048,
-    &barco3,
-    barco3.prioridad,
-    NULL
-  );
-
-  Serial.println("Todos los barcos fueron creados.");
 }
 
 // ===== LOOP =====
 
 void loop() {
-  // No usamos loop()
+  // Botón izquierda
+  if (digitalRead(botonIzquierda) == LOW) {
+    Serial.println("Botón izquierda presionado");
+    crearBarco(0);
+
+    delay(500); // anti rebote simple
+  }
+
+  // Botón derecha
+  if (digitalRead(botonDerecha) == LOW) {
+    Serial.println("Botón derecha presionado");
+    crearBarco(1);
+
+    delay(500); // anti rebote simple
+  }
 }
