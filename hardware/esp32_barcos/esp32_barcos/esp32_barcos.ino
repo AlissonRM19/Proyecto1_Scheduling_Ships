@@ -12,8 +12,16 @@ struct Barco {
 
 
 //======= PINES BOTONES======
-const int botonIzquierda = 4;
-const int botonDerecha = 5;
+const int botonBNormalIzquierda = 4;
+const int botonBPesqueroIzquierda = 5;
+const int botonBPatrullaIzquierda = 6;
+
+
+const int botonBNormalDerecha = 7;
+const int botonBPesqueroDerecha = 8;
+const int botonBPatrullaDerecha = 10;
+
+
 
 // === Control IDs=====
 
@@ -68,15 +76,28 @@ void barcoTask(void *pvParameters) {
 
 //========Funcion para crear barcos ===========
 
-void crearBarco(int lado) {
+void crearBarco(int tipo, int lado) {
   // Reservar memoria dinámica
   Barco *nuevoBarco = new Barco;
 
   nuevoBarco->id = contadorBarcos++;
-  nuevoBarco->tipo = 1; // por ahora todos Normal
+  nuevoBarco->tipo = tipo;
   nuevoBarco->lado = lado;
-  nuevoBarco->tiempoCruce = 5;
-  nuevoBarco->prioridad = 1;
+
+  //tiempos segun el tipo de barco
+  if (tipo == 1){
+    nuevoBarco->tiempoCruce = 5;
+    nuevoBarco->prioridad = 1;
+  }
+  if (tipo == 2){
+    nuevoBarco->tiempoCruce = 4;
+    nuevoBarco->prioridad = 2;
+  }
+  if (tipo == 3){
+    nuevoBarco->tiempoCruce = 2;
+    nuevoBarco->prioridad = 3;
+  }
+  
 
   xTaskCreate(
     barcoTask,
@@ -92,36 +113,59 @@ void crearBarco(int lado) {
 
 void setup() {
   Serial.begin(115200);
-  delay(2000);
+  delay(4000);
 
-  pinMode(botonIzquierda, INPUT_PULLUP);
-  pinMode(botonDerecha, INPUT_PULLUP);
+  pinMode(botonBNormalIzquierda, INPUT_PULLUP);
+  pinMode(botonBPesqueroIzquierda, INPUT_PULLUP);
+  pinMode(botonBPatrullaIzquierda, INPUT_PULLUP);
+
+  pinMode(botonBNormalDerecha, INPUT_PULLUP);
+  pinMode(botonBPesqueroDerecha, INPUT_PULLUP);
+  pinMode(botonBPatrullaDerecha, INPUT_PULLUP);
 
   Serial.println();
   Serial.println("=================================");
   Serial.println("SCHEDULING SHIPS");
-  Serial.println("Presione botones para crear barcos");
-  Serial.println("Botón GPIO 4 -> Izquierda");
-  Serial.println("Botón GPIO 5 -> Derecha");
+  Serial.println("Presione los botones para crear barcos");
+  Serial.println("Botón 1 -> Barco Normal en la Izquierda");
+  Serial.println("Botón 2 -> Barco Pesquero en la Izquierda");
+  Serial.println("Botón 3 -> Barco Patrulla en la Izquierda");
+  Serial.println("Botón 4 -> Barco Normal en la Derecha");
+  Serial.println("Botón 5 -> Barco Pesquero en la Derecha");
+  Serial.println("Botón 6 -> Barco Patrulla en la Derecha");
   Serial.println("=================================");
 }
 
 // ===== LOOP =====
-
 void loop() {
-  // Botón izquierda
-  if (digitalRead(botonIzquierda) == LOW) {
-    Serial.println("Botón izquierda presionado");
-    crearBarco(0);
 
-    delay(500); // anti rebote simple
+  if (digitalRead(botonBNormalIzquierda) == LOW) {
+    crearBarco(1, 0);
+    delay(300);
   }
 
-  // Botón derecha
-  if (digitalRead(botonDerecha) == LOW) {
-    Serial.println("Botón derecha presionado");
-    crearBarco(1);
+  if (digitalRead(botonBPesqueroIzquierda) == LOW) {
+    crearBarco(2, 0);
+    delay(300);
+  }
 
-    delay(500); // anti rebote simple
+  if (digitalRead(botonBPatrullaIzquierda) == LOW) {
+    crearBarco(3, 0);
+    delay(300);
+  }
+
+  if (digitalRead(botonBNormalDerecha) == LOW) {
+    crearBarco(1, 1);
+    delay(300);
+  }
+
+  if (digitalRead(botonBPesqueroDerecha) == LOW) {
+    crearBarco(2, 1);
+    delay(300);
+  }
+
+  if (digitalRead(botonBPatrullaDerecha) == LOW) {
+    crearBarco(3, 1);
+    delay(300);
   }
 }
