@@ -20,6 +20,16 @@ void setup() {
   Serial.println("Sistema iniciado correctamente");
   Serial.println("Presione botones para crear barcos");
   Serial.println("=================================");
+  Serial.println("Scheduler actual: PRIORITY");
+
+  if (DEMO_MODE) {
+  Serial.println("Modo demo activado");
+
+  crearBarco(1, 0); // Normal izquierda
+  crearBarco(3, 1); // Patrulla derecha
+  crearBarco(2, 0); // Pesquero izquierda
+}
+
 }
 
 // ===== LOOP =====

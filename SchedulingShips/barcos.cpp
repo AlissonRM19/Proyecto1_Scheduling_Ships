@@ -101,8 +101,8 @@ void crearBarco(int tipo, int lado) {
 
   Serial.print("Barco ");
   Serial.print(nuevoBarco->id);
-  Serial.println(" agregado a FCFS");
-
+  Serial.println(" agregado al scheduler");
+  
   xTaskCreate(
     barcoTask,
     "Barco",

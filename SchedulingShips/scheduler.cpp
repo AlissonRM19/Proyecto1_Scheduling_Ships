@@ -2,10 +2,14 @@
 #include "scheduler.h"
 #include "barcos.h"
 #include "fcfs_scheduler.h"
+#include "priority_scheduler.h"
+#include "config.h"
+
 
 // ===== FCFS =====
 
-fcfs_scheduler_t queue;
+fcfs_scheduler_t fcfsQueue;
+priority_scheduler_t priorityQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
@@ -16,7 +20,19 @@ bool enqueueBarco(Barco *barco) {
     return false;
   }
 
-  bool result = fcfs_scheduler_enqueue(&queue, barco);
+  bool result = false;
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+    result = fcfs_scheduler_enqueue(&fcfsQueue, barco);
+  }
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+    result = priority_scheduler_enqueue(
+      &priorityQueue,
+      barco,
+      barco->prioridad
+    );
+  }
 
   xSemaphoreGive(queueMutex);
   return result;
@@ -31,18 +47,26 @@ Barco* dequeueBarco() {
     return NULL;
   }
 
-  if (!fcfs_scheduler_dequeue(&queue, (void**)&barco)) {
-    barco = NULL;
+  if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+    if (!fcfs_scheduler_dequeue(&fcfsQueue, (void**)&barco)) {
+      barco = NULL;
+    }
+  }
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+    if (!priority_scheduler_dequeue(&priorityQueue, (void**)&barco)) {
+      barco = NULL;
+    }
   }
 
   xSemaphoreGive(queueMutex);
   return barco;
 }
-
 // ===== INIT =====
 
 void iniciarScheduler() {
-  fcfs_scheduler_init(&queue);
+  fcfs_scheduler_init(&fcfsQueue);
+  priority_scheduler_init(&priorityQueue);
 
   queueMutex = xSemaphoreCreateMutex();
   doneSemaphore = xSemaphoreCreateBinary();
@@ -59,13 +83,33 @@ void iniciarScheduler() {
 
 // ===== TASK DEL SCHEDULER =====
 
+// ===== TASK DEL SCHEDULER =====
+
 void schedulerTask(void *pvParameters) {
   while (true) {
 
-    if (queue.count == 0) {
+    // =========================
+    // Verificar si hay barcos
+    // =========================
+
+    bool colaVacia = true;
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+      colaVacia = (fcfsQueue.count == 0);
+    }
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+      colaVacia = (priorityQueue.count == 0);
+    }
+
+    if (colaVacia) {
       vTaskDelay(200 / portTICK_PERIOD_MS);
       continue;
     }
+
+    // =========================
+    // Sacar siguiente barco
+    // =========================
 
     Barco *proximo = dequeueBarco();
 
@@ -73,13 +117,32 @@ void schedulerTask(void *pvParameters) {
       continue;
     }
 
-    Serial.print("FCFS -> turno para barco ");
-    Serial.println(proximo->id);
+    // =========================
+    // Mostrar scheduler activo
+    // =========================
 
-    // Le da permiso al barco para cruzar
+    if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+      Serial.print("FCFS -> turno para barco ");
+      Serial.println(proximo->id);
+    }
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+      Serial.print("PRIORITY -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | prioridad ");
+      Serial.println(proximo->prioridad);
+    }
+
+    // =========================
+    // Autorizar cruce
+    // =========================
+
     xSemaphoreGive(proximo->sem);
 
-    // Espera a que termine
+    // =========================
+    // Esperar que termine
+    // =========================
+
     xSemaphoreTake(doneSemaphore, portMAX_DELAY);
 
     Serial.print("Barco ");
