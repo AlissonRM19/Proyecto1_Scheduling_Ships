@@ -44,6 +44,9 @@ bool enqueueBarco(Barco *barco) {
       barco,
       barco->tiempoCruce
     );
+
+  }
+  
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     result = rr_scheduler_enqueue(&rrQueue, barco);
   }
@@ -75,6 +78,10 @@ Barco* dequeueBarco() {
 
   if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
     if (!sjf_scheduler_dequeue(&sjfQueue, (void**)&barco)) {
+      barco = NULL;
+    }
+  }
+    
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     if (!rr_scheduler_dequeue(&rrQueue, (void**)&barco)) {
       barco = NULL;
@@ -128,6 +135,8 @@ void schedulerTask(void *pvParameters) {
 
     if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
       colaVacia = (sjfQueue.count == 0);
+    }
+    
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
       colaVacia = (rrQueue.count == 0);
     }
@@ -168,6 +177,9 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.print(" | tiempo de cruce ");
       Serial.print(proximo->tiempoCruce);
+      Serial.println("s");
+    }
+    
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
       Serial.print("RR -> turno para barco ");
       Serial.print(proximo->id);
@@ -200,5 +212,5 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.println(" terminó y libera el canal");
     }
-  }
+}
 }
