@@ -3,6 +3,9 @@
 
 void iniciarHardware();
 void leerBotones();
-void mostrarTipoBarco(int tipo);
+
+void mostrarZonaBarco(int tipo, int zona);
+void mostrarBarcoEnCanal(int tipo, int lado);
+void apagarCanal();
 
 #endif

@@ -2,6 +2,7 @@
 #include "barcos.h"
 #include "config.h"
 #include "scheduler.h"
+#include "hardware.h"
 
 int contadorBarcos = 1;
 
@@ -54,7 +55,9 @@ void barcoTask(void *pvParameters) {
     Serial.print("Barco ");
     Serial.print(barco->id);
     Serial.println(" comienza a cruzar el canal...");
-
+    
+    mostrarZonaBarco(barco->tipo, 1);
+    
     vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
 
     barco->tiempoRestante -= slice;
@@ -69,6 +72,7 @@ void barcoTask(void *pvParameters) {
       Serial.print("Barco ");
       Serial.print(barco->id);
       Serial.println(" completó el cruce!");
+      apagarCanal();
     }
 
     // Avisar al scheduler que terminó este turno
