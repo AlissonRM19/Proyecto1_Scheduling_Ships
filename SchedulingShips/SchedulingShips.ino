@@ -12,6 +12,7 @@ void setup() {
   delay(2000);
 
   iniciarHardware();
+  iniciarScheduler();
 
   Serial.println();
   Serial.println("=================================");

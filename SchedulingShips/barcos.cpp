@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "barcos.h"
+#include "scheduler.h"
 
 int contadorBarcos = 1;
 
@@ -37,10 +38,25 @@ void barcoTask(void *pvParameters) {
   Serial.println("Estado: En cola de listos");
   Serial.println("=================================");
 
-  while (true) {
-    Serial.println("Barco "+ String(barco->id) +" Esperando turno...");
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
-  }
+  // Espera hasta que el scheduler le dé turno
+  xSemaphoreTake(barco->sem, portMAX_DELAY);
+
+  Serial.print("Barco ");
+  Serial.print(barco->id);
+  Serial.println(" comienza a cruzar el canal...");
+
+  vTaskDelay(barco->tiempoCruce * 1000 / portTICK_PERIOD_MS);
+
+  Serial.print("Barco ");
+  Serial.print(barco->id);
+  Serial.println(" completó el cruce!");
+
+  // Avisar al scheduler que terminó
+  xSemaphoreGive(doneSemaphore);
+
+  vSemaphoreDelete(barco->sem);
+  delete barco;
+  vTaskDelete(NULL);
 }
 
 void crearBarco(int tipo, int lado) {
@@ -49,16 +65,48 @@ void crearBarco(int tipo, int lado) {
   nuevoBarco->id = contadorBarcos++;
   nuevoBarco->tipo = tipo;
   nuevoBarco->lado = lado;
-  nuevoBarco->tiempoCruce = 5;
 
-  if (tipo == 1) nuevoBarco->prioridad = 1;
-  if (tipo == 2) nuevoBarco->prioridad = 2;
-  if (tipo == 3) nuevoBarco->prioridad = 3;
+  // NUEVO: semáforo por barco
+  nuevoBarco->sem = xSemaphoreCreateBinary();
+
+  if (nuevoBarco->sem == NULL) {
+    Serial.println("Error creando semáforo");
+    delete nuevoBarco;
+    return;
+  }
+
+  if (tipo == 1) {
+    nuevoBarco->tiempoCruce = 5;
+    nuevoBarco->prioridad = 1;
+  }
+
+  if (tipo == 2) {
+    nuevoBarco->tiempoCruce = 4;
+    nuevoBarco->prioridad = 2;
+  }
+
+  if (tipo == 3) {
+    nuevoBarco->tiempoCruce = 2;
+    nuevoBarco->prioridad = 3;
+  }
+
+  // NUEVO: entra a la cola FCFS
+  if (!enqueueBarco(nuevoBarco)) {
+    Serial.println("Cola llena, no se puede crear barco");
+
+    vSemaphoreDelete(nuevoBarco->sem);
+    delete nuevoBarco;
+    return;
+  }
+
+  Serial.print("Barco ");
+  Serial.print(nuevoBarco->id);
+  Serial.println(" agregado a FCFS");
 
   xTaskCreate(
     barcoTask,
     "Barco",
-    2048,
+    4096,
     nuevoBarco,
     nuevoBarco->prioridad,
     NULL

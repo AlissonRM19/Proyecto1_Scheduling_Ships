@@ -7,6 +7,8 @@ struct Barco {
   int lado;          // 0 = Izquierda, 1 = Derecha
   int tiempoCruce;
   int prioridad;
+
+  SemaphoreHandle_t sem;
 };
 
 String nombreTipo(int tipo);
