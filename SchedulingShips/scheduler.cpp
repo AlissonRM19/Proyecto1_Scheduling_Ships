@@ -4,6 +4,7 @@
 #include "fcfs_scheduler.h"
 #include "priority_scheduler.h"
 #include "sjf_scheduler.h"
+#include "rr_scheduler.h"
 #include "config.h"
 
 
@@ -12,6 +13,7 @@
 fcfs_scheduler_t fcfsQueue;
 priority_scheduler_t priorityQueue;
 sjf_scheduler_t sjfQueue;
+rr_scheduler_t rrQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
@@ -42,6 +44,8 @@ bool enqueueBarco(Barco *barco) {
       barco,
       barco->tiempoCruce
     );
+  if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+    result = rr_scheduler_enqueue(&rrQueue, barco);
   }
 
   xSemaphoreGive(queueMutex);
@@ -71,6 +75,8 @@ Barco* dequeueBarco() {
 
   if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
     if (!sjf_scheduler_dequeue(&sjfQueue, (void**)&barco)) {
+  if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+    if (!rr_scheduler_dequeue(&rrQueue, (void**)&barco)) {
       barco = NULL;
     }
   }
@@ -84,6 +90,7 @@ void iniciarScheduler() {
   fcfs_scheduler_init(&fcfsQueue);
   priority_scheduler_init(&priorityQueue);
   sjf_scheduler_init(&sjfQueue);
+  rr_scheduler_init(&rrQueue);
 
   queueMutex = xSemaphoreCreateMutex();
   doneSemaphore = xSemaphoreCreateBinary();
@@ -121,6 +128,8 @@ void schedulerTask(void *pvParameters) {
 
     if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
       colaVacia = (sjfQueue.count == 0);
+    if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+      colaVacia = (rrQueue.count == 0);
     }
 
     if (colaVacia) {
@@ -159,6 +168,13 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.print(" | tiempo de cruce ");
       Serial.print(proximo->tiempoCruce);
+    if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+      Serial.print("RR -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | tiempo restante ");
+      Serial.print(proximo->tiempoRestante);
+      Serial.print("s | quantum ");
+      Serial.print(RR_QUANTUM);
       Serial.println("s");
     }
 
@@ -174,8 +190,15 @@ void schedulerTask(void *pvParameters) {
 
     xSemaphoreTake(doneSemaphore, portMAX_DELAY);
 
-    Serial.print("Barco ");
-    Serial.print(proximo->id);
-    Serial.println(" terminó y libera el canal");
+    if (SCHEDULER_ACTUAL == SCHEDULER_RR && proximo->tiempoRestante > 0) {
+      Serial.print("RR -> barco ");
+      Serial.print(proximo->id);
+      Serial.println(" regresa a la cola con tiempo restante");
+      enqueueBarco(proximo);
+    } else {
+      Serial.print("Barco ");
+      Serial.print(proximo->id);
+      Serial.println(" terminó y libera el canal");
+    }
   }
 }

@@ -8,6 +8,7 @@ struct Barco {
   int tipo;          // 1 = Normal, 2 = Pesquero, 3 = Patrulla
   int lado;          // 0 = Izquierda, 1 = Derecha
   int tiempoCruce;
+  int tiempoRestante;
   int prioridad;
 
   SemaphoreHandle_t sem;

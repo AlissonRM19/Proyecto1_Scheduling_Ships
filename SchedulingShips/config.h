@@ -20,6 +20,7 @@
 #define SCHEDULER_FCFS      1
 #define SCHEDULER_PRIORITY  2
 #define SCHEDULER_RR        3
+#define RR_QUANTUM          2  // segundos de quantum para Round Robin
 #define SCHEDULER_SJF       4
 #define SCHEDULER_STRN      5
 #define SCHEDULER_EDF       6
@@ -29,6 +30,7 @@
 // ============================
 
 #define SCHEDULER_ACTUAL SCHEDULER_SJF
+
 
 // Cambiar aquí para pruebas:
 // FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS

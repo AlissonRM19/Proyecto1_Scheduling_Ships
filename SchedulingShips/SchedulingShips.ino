@@ -34,12 +34,13 @@ void setup() {
   }
 
   if (DEMO_MODE) {
-  Serial.println("Modo demo activado");
-
-  crearBarco(1, 0); // Normal izquierda
-  crearBarco(3, 1); // Patrulla derecha
-  crearBarco(2, 0); // Pesquero izquierda
-}
+    delay(2000);
+    Serial.println("Modo demo activado");
+  
+    crearBarco(1, 0); // Normal izquierda
+    crearBarco(3, 1); // Patrulla derecha
+    crearBarco(2, 0); // Pesquero izquierda
+  }
 
 }
 
