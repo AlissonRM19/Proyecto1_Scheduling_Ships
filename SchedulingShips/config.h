@@ -20,6 +20,7 @@
 #define SCHEDULER_FCFS      1
 #define SCHEDULER_PRIORITY  2
 #define SCHEDULER_RR        3
+#define RR_QUANTUM          2  // segundos de quantum para Round Robin
 #define SCHEDULER_SJF       4
 #define SCHEDULER_STRN      5
 #define SCHEDULER_EDF       6
@@ -28,7 +29,7 @@
 // SELECCIÓN ACTUAL
 // ============================
 
-#define SCHEDULER_ACTUAL SCHEDULER_PRIORITY
+#define SCHEDULER_ACTUAL SCHEDULER_RR
 
 // Cambiar aquí para pruebas:
 // FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS
@@ -42,7 +43,7 @@
 // DEMO MODE
 // ============================
 
-#define DEMO_MODE true
+#define DEMO_MODE false
 
 // true  -> crea barcos automáticos
 // false -> usa botones físicos

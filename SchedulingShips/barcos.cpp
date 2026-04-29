@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "barcos.h"
+#include "config.h"
 #include "scheduler.h"
 
 int contadorBarcos = 1;
@@ -38,21 +39,37 @@ void barcoTask(void *pvParameters) {
   Serial.println("Estado: En cola de listos");
   Serial.println("=================================");
 
-  // Espera hasta que el scheduler le dé turno
-  xSemaphoreTake(barco->sem, portMAX_DELAY);
+  while (barco->tiempoRestante > 0) {
+    // Espera hasta que el scheduler le dé turno
+    xSemaphoreTake(barco->sem, portMAX_DELAY);
 
-  Serial.print("Barco ");
-  Serial.print(barco->id);
-  Serial.println(" comienza a cruzar el canal...");
+    int slice = barco->tiempoRestante;
+    if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
+      slice = RR_QUANTUM;
+    }
 
-  vTaskDelay(barco->tiempoCruce * 1000 / portTICK_PERIOD_MS);
+    Serial.print("Barco ");
+    Serial.print(barco->id);
+    Serial.println(" comienza a cruzar el canal...");
 
-  Serial.print("Barco ");
-  Serial.print(barco->id);
-  Serial.println(" completó el cruce!");
+    vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
+    barco->tiempoRestante -= slice;
 
-  // Avisar al scheduler que terminó
-  xSemaphoreGive(doneSemaphore);
+    if (barco->tiempoRestante > 0) {
+      Serial.print("Barco ");
+      Serial.print(barco->id);
+      Serial.print(" pausa el cruce, quedan ");
+      Serial.print(barco->tiempoRestante);
+      Serial.println(" segundos restantes");
+    } else {
+      Serial.print("Barco ");
+      Serial.print(barco->id);
+      Serial.println(" completó el cruce!");
+    }
+
+    // Avisar al scheduler que terminó este quantum
+    xSemaphoreGive(doneSemaphore);
+  }
 
   vSemaphoreDelete(barco->sem);
   delete barco;
@@ -90,7 +107,9 @@ void crearBarco(int tipo, int lado) {
     nuevoBarco->prioridad = 3;
   }
 
-  // NUEVO: entra a la cola FCFS
+  nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
+
+  // Entra a la cola del scheduler activo
   if (!enqueueBarco(nuevoBarco)) {
     Serial.println("Cola llena, no se puede crear barco");
 

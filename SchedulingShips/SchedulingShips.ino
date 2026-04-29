@@ -20,7 +20,18 @@ void setup() {
   Serial.println("Sistema iniciado correctamente");
   Serial.println("Presione botones para crear barcos");
   Serial.println("=================================");
-  Serial.println("Scheduler actual: PRIORITY");
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+    Serial.println("Scheduler actual: FCFS");
+  } else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+    Serial.println("Scheduler actual: PRIORITY");
+  } else if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+    Serial.print("Scheduler actual: RR (Quantum = ");
+    Serial.print(RR_QUANTUM);
+    Serial.println("s)");
+  } else {
+    Serial.println("Scheduler actual: DESCONOCIDO");
+  }
 
   if (DEMO_MODE) {
   Serial.println("Modo demo activado");
