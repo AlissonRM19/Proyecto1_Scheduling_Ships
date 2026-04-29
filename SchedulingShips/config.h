@@ -43,7 +43,7 @@
 // DEMO MODE
 // ============================
 
-#define DEMO_MODE false
+#define DEMO_MODE true
 
 // true  -> crea barcos automáticos
 // false -> usa botones físicos
