@@ -1,0 +1,15 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define PIN_LED 11
+#define NUM_LEDS 8
+
+#define BOTON_NORMAL_IZQ 4
+#define BOTON_PESQUERO_IZQ 5
+#define BOTON_PATRULLA_IZQ 6
+
+#define BOTON_NORMAL_DER 7
+#define BOTON_PESQUERO_DER 8
+#define BOTON_PATRULLA_DER 10
+
+#endif
