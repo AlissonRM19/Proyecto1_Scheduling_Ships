@@ -1,6 +1,8 @@
 #ifndef BARCOS_H
 #define BARCOS_H
 
+#include <Arduino.h>
+
 struct Barco {
   int id;
   int tipo;          // 1 = Normal, 2 = Pesquero, 3 = Patrulla

@@ -3,13 +3,15 @@
 #include "barcos.h"
 #include "fcfs_scheduler.h"
 #include "priority_scheduler.h"
+#include "sjf_scheduler.h"
 #include "config.h"
 
 
-// ===== FCFS =====
+// ===== COLAS =====
 
 fcfs_scheduler_t fcfsQueue;
 priority_scheduler_t priorityQueue;
+sjf_scheduler_t sjfQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
@@ -31,6 +33,14 @@ bool enqueueBarco(Barco *barco) {
       &priorityQueue,
       barco,
       barco->prioridad
+    );
+  }
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+    result = sjf_scheduler_enqueue(
+      &sjfQueue,
+      barco,
+      barco->tiempoCruce
     );
   }
 
@@ -59,6 +69,12 @@ Barco* dequeueBarco() {
     }
   }
 
+  if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+    if (!sjf_scheduler_dequeue(&sjfQueue, (void**)&barco)) {
+      barco = NULL;
+    }
+  }
+
   xSemaphoreGive(queueMutex);
   return barco;
 }
@@ -67,6 +83,7 @@ Barco* dequeueBarco() {
 void iniciarScheduler() {
   fcfs_scheduler_init(&fcfsQueue);
   priority_scheduler_init(&priorityQueue);
+  sjf_scheduler_init(&sjfQueue);
 
   queueMutex = xSemaphoreCreateMutex();
   doneSemaphore = xSemaphoreCreateBinary();
@@ -102,6 +119,10 @@ void schedulerTask(void *pvParameters) {
       colaVacia = (priorityQueue.count == 0);
     }
 
+    if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+      colaVacia = (sjfQueue.count == 0);
+    }
+
     if (colaVacia) {
       vTaskDelay(200 / portTICK_PERIOD_MS);
       continue;
@@ -131,6 +152,14 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.print(" | prioridad ");
       Serial.println(proximo->prioridad);
+    }
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+      Serial.print("SJF -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | tiempo de cruce ");
+      Serial.print(proximo->tiempoCruce);
+      Serial.println("s");
     }
 
     // =========================
