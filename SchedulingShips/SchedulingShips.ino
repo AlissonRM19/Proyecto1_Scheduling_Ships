@@ -26,9 +26,9 @@ void setup() {
   } else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
     Serial.println("Scheduler actual: PRIORITY");
   } else if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
-    Serial.print("Scheduler actual: RR (Quantum = ");
-    Serial.print(RR_QUANTUM);
-    Serial.println("s)");
+    Serial.println("Scheduler actual: RR");
+  } else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+    Serial.println("Scheduler actual: SJF");
   } else {
     Serial.println("Scheduler actual: DESCONOCIDO");
   }

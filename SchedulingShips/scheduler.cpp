@@ -3,6 +3,7 @@
 #include "barcos.h"
 #include "fcfs_scheduler.h"
 #include "priority_scheduler.h"
+#include "sjf_scheduler.h"
 #include "rr_scheduler.h"
 #include "config.h"
 
@@ -11,6 +12,7 @@
 
 fcfs_scheduler_t fcfsQueue;
 priority_scheduler_t priorityQueue;
+sjf_scheduler_t sjfQueue;
 rr_scheduler_t rrQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
@@ -36,6 +38,12 @@ bool enqueueBarco(Barco *barco) {
     );
   }
 
+  if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+    result = sjf_scheduler_enqueue(
+      &sjfQueue,
+      barco,
+      barco->tiempoCruce
+    );
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     result = rr_scheduler_enqueue(&rrQueue, barco);
   }
@@ -65,6 +73,8 @@ Barco* dequeueBarco() {
     }
   }
 
+  if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+    if (!sjf_scheduler_dequeue(&sjfQueue, (void**)&barco)) {
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     if (!rr_scheduler_dequeue(&rrQueue, (void**)&barco)) {
       barco = NULL;
@@ -79,6 +89,7 @@ Barco* dequeueBarco() {
 void iniciarScheduler() {
   fcfs_scheduler_init(&fcfsQueue);
   priority_scheduler_init(&priorityQueue);
+  sjf_scheduler_init(&sjfQueue);
   rr_scheduler_init(&rrQueue);
 
   queueMutex = xSemaphoreCreateMutex();
@@ -115,6 +126,8 @@ void schedulerTask(void *pvParameters) {
       colaVacia = (priorityQueue.count == 0);
     }
 
+    if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+      colaVacia = (sjfQueue.count == 0);
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
       colaVacia = (rrQueue.count == 0);
     }
@@ -150,6 +163,11 @@ void schedulerTask(void *pvParameters) {
       Serial.println(proximo->prioridad);
     }
 
+    if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+      Serial.print("SJF -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | tiempo de cruce ");
+      Serial.print(proximo->tiempoCruce);
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
       Serial.print("RR -> turno para barco ");
       Serial.print(proximo->id);
