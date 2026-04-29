@@ -10,6 +10,7 @@ struct Barco {
   int tiempoCruce;
   int tiempoRestante;
   int prioridad;
+  int deadline;
 
   SemaphoreHandle_t sem;
 };

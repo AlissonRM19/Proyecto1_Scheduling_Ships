@@ -6,6 +6,7 @@
 #include "sjf_scheduler.h"
 #include "rr_scheduler.h"
 #include "strn_scheduler.h"
+#include "edf_scheduler.h"
 #include "config.h"
 
 
@@ -16,6 +17,7 @@ priority_scheduler_t priorityQueue;
 sjf_scheduler_t sjfQueue;
 rr_scheduler_t rrQueue;
 strn_scheduler_t strnQueue;
+edf_scheduler_t edfQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
@@ -57,6 +59,14 @@ bool enqueueBarco(Barco *barco) {
       &strnQueue,
       barco,
       barco->tiempoRestante
+    );
+  }
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+    result = edf_scheduler_enqueue(
+      &edfQueue,
+      barco,
+      barco->deadline
     );
   }
 
@@ -103,6 +113,12 @@ Barco* dequeueBarco() {
     }
   }
 
+  if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+    if (!edf_scheduler_dequeue(&edfQueue, (void**)&barco)) {
+      barco = NULL;
+    }
+  }
+
   xSemaphoreGive(queueMutex);
   return barco;
 }
@@ -114,6 +130,7 @@ void iniciarScheduler() {
   sjf_scheduler_init(&sjfQueue);
   rr_scheduler_init(&rrQueue);
   strn_scheduler_init(&strnQueue);
+  edf_scheduler_init(&edfQueue);
 
   queueMutex = xSemaphoreCreateMutex();
   doneSemaphore = xSemaphoreCreateBinary();
@@ -159,6 +176,10 @@ void schedulerTask(void *pvParameters) {
     
     if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
       colaVacia = (strnQueue.count == 0);
+    }
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+      colaVacia = (edfQueue.count == 0);
     }
 
     if (colaVacia) {
@@ -214,6 +235,14 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.print(" | tiempo restante ");
       Serial.print(proximo->tiempoRestante);
+      Serial.println("s");
+    }
+
+    if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+      Serial.print("EDF -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | deadline ");
+      Serial.print(proximo->deadline);
       Serial.println("s");
     }
     // =========================

@@ -36,6 +36,9 @@ void barcoTask(void *pvParameters) {
   Serial.print("Prioridad: ");
   Serial.println(barco->prioridad);
 
+  Serial.print("Deadline: ");
+  Serial.println(barco->deadline);
+
   Serial.println("Estado: En cola de listos");
   Serial.println("=================================");
 
@@ -100,16 +103,19 @@ void crearBarco(int tipo, int lado) {
   if (tipo == 1) {
     nuevoBarco->tiempoCruce = 5;
     nuevoBarco->prioridad = 1;
+    nuevoBarco->deadline = 5;
   }
 
   if (tipo == 2) {
     nuevoBarco->tiempoCruce = 4;
     nuevoBarco->prioridad = 2;
+    nuevoBarco->deadline = 4;
   }
 
   if (tipo == 3) {
     nuevoBarco->tiempoCruce = 2;
     nuevoBarco->prioridad = 3;
+    nuevoBarco->deadline = 2;
   }
 
   // Inicializar tiempo restante
