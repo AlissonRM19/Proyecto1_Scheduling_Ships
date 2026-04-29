@@ -5,6 +5,7 @@
 #include "priority_scheduler.h"
 #include "sjf_scheduler.h"
 #include "rr_scheduler.h"
+#include "strn_scheduler.h"
 #include "config.h"
 
 
@@ -14,6 +15,7 @@ fcfs_scheduler_t fcfsQueue;
 priority_scheduler_t priorityQueue;
 sjf_scheduler_t sjfQueue;
 rr_scheduler_t rrQueue;
+strn_scheduler_t strnQueue;
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
@@ -44,11 +46,18 @@ bool enqueueBarco(Barco *barco) {
       barco,
       barco->tiempoCruce
     );
-
   }
   
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     result = rr_scheduler_enqueue(&rrQueue, barco);
+  }
+
+  if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+    result = strn_scheduler_enqueue(
+      &strnQueue,
+      barco,
+      barco->tiempoRestante
+    );
   }
 
   xSemaphoreGive(queueMutex);
@@ -81,9 +90,15 @@ Barco* dequeueBarco() {
       barco = NULL;
     }
   }
-    
+  
   if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
     if (!rr_scheduler_dequeue(&rrQueue, (void**)&barco)) {
+      barco = NULL;
+    }
+  }
+  
+  if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+    if (!strn_scheduler_dequeue(&strnQueue, (void**)&barco)) {
       barco = NULL;
     }
   }
@@ -98,6 +113,7 @@ void iniciarScheduler() {
   priority_scheduler_init(&priorityQueue);
   sjf_scheduler_init(&sjfQueue);
   rr_scheduler_init(&rrQueue);
+  strn_scheduler_init(&strnQueue);
 
   queueMutex = xSemaphoreCreateMutex();
   doneSemaphore = xSemaphoreCreateBinary();
@@ -140,6 +156,10 @@ void schedulerTask(void *pvParameters) {
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
       colaVacia = (rrQueue.count == 0);
     }
+    
+    if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+      colaVacia = (strnQueue.count == 0);
+    }
 
     if (colaVacia) {
       vTaskDelay(200 / portTICK_PERIOD_MS);
@@ -177,7 +197,6 @@ void schedulerTask(void *pvParameters) {
       Serial.print(proximo->id);
       Serial.print(" | tiempo de cruce ");
       Serial.print(proximo->tiempoCruce);
-      Serial.println("s");
     }
     
     if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
@@ -190,6 +209,13 @@ void schedulerTask(void *pvParameters) {
       Serial.println("s");
     }
 
+    if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+      Serial.print("STRN -> turno para barco ");
+      Serial.print(proximo->id);
+      Serial.print(" | tiempo restante ");
+      Serial.print(proximo->tiempoRestante);
+      Serial.println("s");
+    }
     // =========================
     // Autorizar cruce
     // =========================
@@ -202,15 +228,30 @@ void schedulerTask(void *pvParameters) {
 
     xSemaphoreTake(doneSemaphore, portMAX_DELAY);
 
-    if (SCHEDULER_ACTUAL == SCHEDULER_RR && proximo->tiempoRestante > 0) {
-      Serial.print("RR -> barco ");
+    // RR y STRN pueden re-encolar
+    if (
+      (SCHEDULER_ACTUAL == SCHEDULER_RR ||
+       SCHEDULER_ACTUAL == SCHEDULER_STRN)
+      &&
+      proximo->tiempoRestante > 0
+    ) {
+
+      if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+        Serial.print("RR -> barco ");
+      } else {
+        Serial.print("STRN -> barco ");
+      }
+
       Serial.print(proximo->id);
       Serial.println(" regresa a la cola con tiempo restante");
+
       enqueueBarco(proximo);
-    } else {
+    }
+    else {
       Serial.print("Barco ");
       Serial.print(proximo->id);
       Serial.println(" terminó y libera el canal");
     }
-}
+
+  } 
 }

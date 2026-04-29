@@ -29,6 +29,8 @@ void setup() {
     Serial.println("Scheduler actual: RR");
   } else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
     Serial.println("Scheduler actual: SJF");
+  }else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+    Serial.println("Scheduler actual: STRN");
   } else {
     Serial.println("Scheduler actual: DESCONOCIDO");
   }

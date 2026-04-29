@@ -40,10 +40,13 @@ void barcoTask(void *pvParameters) {
   Serial.println("=================================");
 
   while (barco->tiempoRestante > 0) {
-    // Espera hasta que el scheduler le dé turno
+
+    // Espera permiso del scheduler
     xSemaphoreTake(barco->sem, portMAX_DELAY);
 
     int slice = barco->tiempoRestante;
+
+    // Solo RR usa quantum fijo
     if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
       slice = RR_QUANTUM;
     }
@@ -53,6 +56,7 @@ void barcoTask(void *pvParameters) {
     Serial.println(" comienza a cruzar el canal...");
 
     vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
+
     barco->tiempoRestante -= slice;
 
     if (barco->tiempoRestante > 0) {
@@ -67,7 +71,7 @@ void barcoTask(void *pvParameters) {
       Serial.println(" completó el cruce!");
     }
 
-    // Avisar al scheduler que terminó este quantum
+    // Avisar al scheduler que terminó este turno
     xSemaphoreGive(doneSemaphore);
   }
 
@@ -83,7 +87,7 @@ void crearBarco(int tipo, int lado) {
   nuevoBarco->tipo = tipo;
   nuevoBarco->lado = lado;
 
-  // NUEVO: semáforo por barco
+  // Crear semáforo individual del barco
   nuevoBarco->sem = xSemaphoreCreateBinary();
 
   if (nuevoBarco->sem == NULL) {
@@ -92,6 +96,7 @@ void crearBarco(int tipo, int lado) {
     return;
   }
 
+  // Asignar tiempo y prioridad según tipo
   if (tipo == 1) {
     nuevoBarco->tiempoCruce = 5;
     nuevoBarco->prioridad = 1;
@@ -107,9 +112,10 @@ void crearBarco(int tipo, int lado) {
     nuevoBarco->prioridad = 3;
   }
 
+  // Inicializar tiempo restante
   nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
 
-  // Entra a la cola del scheduler activo
+  // Entra a la cola del scheduler actual
   if (!enqueueBarco(nuevoBarco)) {
     Serial.println("Cola llena, no se puede crear barco");
 
@@ -121,7 +127,7 @@ void crearBarco(int tipo, int lado) {
   Serial.print("Barco ");
   Serial.print(nuevoBarco->id);
   Serial.println(" agregado al scheduler");
-  
+
   xTaskCreate(
     barcoTask,
     "Barco",
