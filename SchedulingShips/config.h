@@ -29,8 +29,7 @@
 // SELECCIÓN ACTUAL
 // ============================
 
-#define SCHEDULER_ACTUAL SCHEDULER_SJF
-
+#define SCHEDULER_ACTUAL SCHEDULER_STRN
 
 // Cambiar aquí para pruebas:
 // FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS
@@ -44,7 +43,7 @@
 // DEMO MODE
 // ============================
 
-#define DEMO_MODE true
+#define DEMO_MODE false
 
 // true  -> crea barcos automáticos
 // false -> usa botones físicos
