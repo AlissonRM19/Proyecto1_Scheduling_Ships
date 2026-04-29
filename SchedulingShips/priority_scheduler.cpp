@@ -1,5 +1,6 @@
 #include <cstddef>
 #include "priority_scheduler.h"
+#include "barcos.h"
 
 void priority_scheduler_init(priority_scheduler_t* q) {
   if (q == NULL) return;
@@ -20,7 +21,7 @@ bool priority_scheduler_enqueue(
 
   int i = q->count;
 
-  while (i > 0) {
+  while (i > 0 && ((Barco*)q->buffer[i - 1])->prioridad < prioridad) {
     void* anterior = q->buffer[i - 1];
 
     // Esto luego lo resolvemos desde barcos.h
