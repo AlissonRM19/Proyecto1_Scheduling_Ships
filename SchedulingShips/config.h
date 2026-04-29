@@ -29,7 +29,7 @@
 // SELECCIÓN ACTUAL
 // ============================
 
-#define SCHEDULER_ACTUAL SCHEDULER_SJF
+#define SCHEDULER_ACTUAL SCHEDULER_RR
 
 
 // Cambiar aquí para pruebas:
