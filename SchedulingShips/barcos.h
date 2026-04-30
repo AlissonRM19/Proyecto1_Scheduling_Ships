@@ -1,23 +1,27 @@
 #ifndef BARCOS_H
 #define BARCOS_H
 
-#include <Arduino.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct Barco {
-  int id;
-  int tipo;          // 1 = Normal, 2 = Pesquero, 3 = Patrulla
-  int lado;          // 0 = Izquierda, 1 = Derecha
-  int tiempoCruce;
-  int tiempoRestante;
-  int prioridad;
+// Tus estructuras (ejemplo)
+typedef struct {
+    int id;
+    int tipo;
+    int lado;
+    int tiempoCruce;
+    int tiempoRestante;
+    int prioridad;
+    void* sem; // Cambiado a void* si quitas Arduino.h para evitar líos
+} Barco;
 
-  SemaphoreHandle_t sem;
-};
-
-String nombreTipo(int tipo);
-String nombreLado(int lado);
-
-void barcoTask(void *pvParameters);
+// Declaraciones de funciones
 void crearBarco(int tipo, int lado);
+void barcoTask(void *pvParameters);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
