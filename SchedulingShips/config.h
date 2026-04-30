@@ -36,7 +36,7 @@
 // SELECCIÓN ACTUAL
 // ============================
 
-#define SCHEDULER_ACTUAL SCHEDULER_SJF
+#define SCHEDULER_ACTUAL SCHEDULER_STRN
 
 // Cambiar aquí para pruebas:
 // FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS

@@ -1,6 +1,9 @@
 #ifndef STRN_SCHEDULER_H
 #define STRN_SCHEDULER_H
 
+
+#include <stdbool.h>
+#include <stddef.h>
 #include "barcos.h"
 #include "config.h" // Para STRN_SCHEDULER_MAX_ITEMS
 

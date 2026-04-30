@@ -1,11 +1,10 @@
-#include <stddef.h>      // Requerido para NULL en C puro
 #include "strn_scheduler.h"
-#include "barcos.h"
-#include "config.h"      // Asegúrate de que aquí esté definido STRN_SCHEDULER_MAX_ITEMS
+#include <stddef.h> 
 
 void strn_scheduler_init(strn_scheduler_t *q) {
+    if (q == NULL) return; // Validación de seguridad
+    
     q->count = 0;
-    // Si tu estructura tiene un head/tail o buffer, inicialízalos aquí
     for (int i = 0; i < STRN_SCHEDULER_MAX_ITEMS; i++) {
         q->buffer[i] = NULL;
     }
