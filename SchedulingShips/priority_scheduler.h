@@ -1,6 +1,7 @@
 #ifndef PRIORITY_SCHEDULER_H
 #define PRIORITY_SCHEDULER_H
 
+#include <stdbool.h>
 #include "barcos.h"
 
 #ifdef __cplusplus
