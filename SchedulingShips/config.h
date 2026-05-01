@@ -5,7 +5,7 @@
 #define PRIORITY_SCHEDULER_MAX_ITEMS 10
 #define SJF_SCHEDULER_MAX_ITEMS 10
 #define RR_SCHEDULER_MAX_ITEMS 10
-#define STRN_SCHEDULER_MAX_ITEMS 10  // <--- Esta es la que te falta
+#define STRN_SCHEDULER_MAX_ITEMS 10
 #define RR_QUANTUM 2
 
 #define PIN_LED 11
@@ -36,7 +36,7 @@
 // SELECCIÓN ACTUAL
 // ============================
 
-#define SCHEDULER_ACTUAL SCHEDULER_STRN
+#define SCHEDULER_ACTUAL SCHEDULER_EDF
 
 // Cambiar aquí para pruebas:
 // FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS

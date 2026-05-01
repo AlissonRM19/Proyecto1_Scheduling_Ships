@@ -13,6 +13,7 @@ typedef struct {
     int tiempoCruce;
     int tiempoRestante;
     int prioridad;
+    int deadline;
     void* sem; // Cambiado a void* si quitas Arduino.h para evitar líos
 } Barco;
 

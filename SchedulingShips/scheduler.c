@@ -11,6 +11,7 @@
 #include "sjf_scheduler.h"
 #include "rr_scheduler.h"
 #include "strn_scheduler.h"
+#include "edf_scheduler.h"
 #include "config.h"
 
 // ===== COLAS =====
@@ -19,6 +20,7 @@ priority_scheduler_t priorityQueue;
 sjf_scheduler_t sjfQueue;
 rr_scheduler_t rrQueue;
 strn_scheduler_t strnQueue;
+edf_scheduler_t edfQueue;
 
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
@@ -46,6 +48,9 @@ bool enqueueBarco(Barco *barco) {
     }
     else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
         result = strn_scheduler_enqueue(&strnQueue, barco, barco->tiempoRestante);
+    }
+    else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+        result = edf_scheduler_enqueue(&edfQueue, barco, barco->deadline);
     }
 
     xSemaphoreGive(queueMutex);
@@ -76,6 +81,9 @@ Barco* dequeueBarco() {
     else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
         if (!strn_scheduler_dequeue(&strnQueue, (void**)&barco)) barco = NULL;
     }
+    else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+        if (!edf_scheduler_dequeue(&edfQueue, (void**)&barco)) barco = NULL;
+    }
 
     xSemaphoreGive(queueMutex);
     return barco;
@@ -89,6 +97,7 @@ void iniciarScheduler() {
     sjf_scheduler_init(&sjfQueue);
     rr_scheduler_init(&rrQueue);
     strn_scheduler_init(&strnQueue);
+    edf_scheduler_init(&edfQueue);
 
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
@@ -117,6 +126,7 @@ void schedulerTask(void *pvParameters) {
         else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjfQueue.count == 0);
         else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rrQueue.count == 0);
         else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strnQueue.count == 0);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edfQueue.count == 0);
 
         if (colaVacia) {
             vTaskDelay(pdMS_TO_TICKS(200));
@@ -146,6 +156,9 @@ void schedulerTask(void *pvParameters) {
         }
         else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
             printf("STRN -> turno para barco %d | tiempo restante %ds\n", proximo->id, proximo->tiempoRestante);
+        }
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+            printf("EDF -> turno para barco %d | deadline %d\n", proximo->id, proximo->deadline);
         }
 
         // =========================

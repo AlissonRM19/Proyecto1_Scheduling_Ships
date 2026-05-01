@@ -97,6 +97,9 @@ void crearBarco(int tipo, int lado) {
 
     nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
 
+    nuevoBarco->deadline = (int)(pdTICKS_TO_MS(xTaskGetTickCount()) / 1000) + (rand() % 20 + 10);
+
+
     if (!enqueueBarco(nuevoBarco)) {
         printf("Cola llena\n");
         vSemaphoreDelete(nuevoBarco->sem);
