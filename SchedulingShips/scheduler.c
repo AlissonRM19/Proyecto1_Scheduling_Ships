@@ -27,10 +27,13 @@ SemaphoreHandle_t doneSemaphore;
 
 // Por ahora fijo en 0 (Izquierda). Esto lo moverá el "Letrero" o "Equidad".
 int sentidoActual = 0;
+Barco* barco_en_canal = NULL;
 
 // ===== ENQUEUE =====
 // Encola un barco en la cola correspondiente al scheduler activo, usando su prioridad, tiempo de cruce, tiempo restante o deadline según corresponda
 bool enqueueBarco(Barco *barco) {
+
+    
     if (xSemaphoreTake(queueMutex, portMAX_DELAY) != pdTRUE) {
         return false;
     }
@@ -189,12 +192,15 @@ void schedulerTask(void *pvParameters) {
         // =========================
         // Autorizar cruce
         // =========================
+        barco_en_canal = proximo;
         xSemaphoreGive(proximo->sem);
 
         // =========================
         // Esperar que termine
         // =========================
         xSemaphoreTake(doneSemaphore, portMAX_DELAY);
+
+        barco_en_canal = NULL; //Limpiar al terminar
 
         // Re-encolar si es necesario (Preemptive/Quantum)
         if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {

@@ -1,8 +1,9 @@
 #include <Adafruit_NeoPixel.h>
-#include "hardware.h"
+#include "led_wrapper.h" // Incluimos el .h que acabamos de crear
 #include "config.h"
 
-Adafruit_NeoPixel tira(NUM_LEDS, PIN_LED, NEO_GRB + NEO_KHZ800);
+// Usamos NUM_LEDS definido en tu config.h
+Adafruit_NeoPixel tira(64, PIN_LED, NEO_GRB + NEO_KHZ800); 
 
 extern "C" void led_init() {
     tira.begin();
@@ -10,8 +11,13 @@ extern "C" void led_init() {
     tira.show();
 }
 
-extern "C" void led_set_color(int r, int g, int b) {
-    tira.setPixelColor(0, tira.Color(r, g, b));
+extern "C" void led_set_pixel(int index, int r, int g, int b) {
+    if (index >= 0 && index < 64) {
+        tira.setPixelColor(index, tira.Color(r, g, b));
+    }
+}
+
+extern "C" void led_show() {
     tira.show();
 }
 

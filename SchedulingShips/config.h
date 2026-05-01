@@ -65,7 +65,6 @@ typedef struct {
 
 extern ConfigProyecto miConfig;
 
-// Para mantener compatibilidad con tu código actual de ayer:
 #define SCHEDULER_ACTUAL miConfig.scheduler
 #define RR_QUANTUM miConfig.quantumRR 
 

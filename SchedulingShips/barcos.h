@@ -10,6 +10,7 @@ typedef struct {
     int id;
     int tipo;
     int lado;
+    int posicion;
     int tiempoCruce;
     int tiempoRestante;
     int prioridad;

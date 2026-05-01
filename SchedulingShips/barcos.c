@@ -49,6 +49,20 @@ void barcoTask(void *pvParameters) {
 
         printf("Barco %d comienza a cruzar el canal...\n", barco->id);
 
+        // --- LÓGICA DE MOVIMIENTO LED ---
+        if (barco->lado == 0) { // Viene de IZQ a DER
+            for (int p = 4; p <= 8; p++) {
+                barco->posicion = p;
+                // Usamos una fracción del tiempo de cruce para cada paso de LED
+                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5)); 
+            }
+        } else { // Viene de DER a IZQ
+            for (int p = 8; p >= 4; p--) {
+                barco->posicion = p;
+                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5));
+            }
+        }
+
         vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
 
         barco->tiempoRestante -= slice;
@@ -78,6 +92,7 @@ void crearBarco(int tipo, int lado) {
         printf("Error reservando memoria\n");
         return;
     }
+    nuevoBarco->posicion = (lado == 0) ? 0 : 12; // Espera en los extremos
 
     // Inicialización del barco
     // Asignamos un ID único al barco y configuramos sus atributos según el tipo
@@ -105,6 +120,7 @@ void crearBarco(int tipo, int lado) {
         nuevoBarco->tiempoCruce = 2;
         nuevoBarco->prioridad = 3;
     }
+    
 
     // El tiempo restante inicialmente es igual al tiempo de cruce total
     nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
