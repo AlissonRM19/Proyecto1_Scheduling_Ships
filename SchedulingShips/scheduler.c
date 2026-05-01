@@ -15,15 +15,18 @@
 #include "config.h"
 
 // ===== COLAS =====
-fcfs_scheduler_t fcfsQueue;
-priority_scheduler_t priorityQueue;
-sjf_scheduler_t sjfQueue;
-rr_scheduler_t rrQueue;
-strn_scheduler_t strnQueue;
-edf_scheduler_t edfQueue;
+fcfs_scheduler_t fcfs_Izq, fcfs_Der;
+priority_scheduler_t prio_Izq, prio_Der;
+sjf_scheduler_t sjf_Izq, sjf_Der;
+rr_scheduler_t rr_Izq, rr_Der;
+strn_scheduler_t strn_Izq, strn_Der;
+edf_scheduler_t edf_Izq, edf_Der;
 
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
+
+// Por ahora fijo en 0 (Izquierda). Esto lo moverá el "Letrero" o "Equidad".
+int sentidoActual = 0;
 
 // ===== ENQUEUE =====
 // Encola un barco en la cola correspondiente al scheduler activo, usando su prioridad, tiempo de cruce, tiempo restante o deadline según corresponda
@@ -34,25 +37,23 @@ bool enqueueBarco(Barco *barco) {
 
     bool result = false;
 
-    if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
-        result = fcfs_scheduler_enqueue(&fcfsQueue, barco);
+    if (barco->lado == 0) { // LADO IZQUIERDO
+        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) result = fcfs_scheduler_enqueue(&fcfs_Izq, barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) result = priority_scheduler_enqueue(&prio_Izq, barco, barco->prioridad);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) result = sjf_scheduler_enqueue(&sjf_Izq, barco, barco->tiempoCruce);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) result = rr_scheduler_enqueue(&rr_Izq, barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) result = strn_scheduler_enqueue(&strn_Izq, barco, barco->tiempoRestante);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) result = edf_scheduler_enqueue(&edf_Izq, barco, barco->deadline);
+    } 
+    else { // LADO DERECHO
+        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) result = fcfs_scheduler_enqueue(&fcfs_Der, barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) result = priority_scheduler_enqueue(&prio_Der, barco, barco->prioridad);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) result = sjf_scheduler_enqueue(&sjf_Der, barco, barco->tiempoCruce);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) result = rr_scheduler_enqueue(&rr_Der, barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) result = strn_scheduler_enqueue(&strn_Der, barco, barco->tiempoRestante);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) result = edf_scheduler_enqueue(&edf_Der, barco, barco->deadline);
     }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
-        result = priority_scheduler_enqueue(&priorityQueue, barco, barco->prioridad);
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
-        result = sjf_scheduler_enqueue(&sjfQueue, barco, barco->tiempoCruce);
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
-        result = rr_scheduler_enqueue(&rrQueue, barco);
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
-        result = strn_scheduler_enqueue(&strnQueue, barco, barco->tiempoRestante);
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
-        result = edf_scheduler_enqueue(&edfQueue, barco, barco->deadline);
-    }
-
+    
     xSemaphoreGive(queueMutex);
     return result;
 }
@@ -67,23 +68,22 @@ Barco* dequeueBarco() {
         return NULL;
     }
 
-    if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
-        if (!fcfs_scheduler_dequeue(&fcfsQueue, (void**)&barco)) barco = NULL;
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
-        if (!priority_scheduler_dequeue(&priorityQueue, (void**)&barco)) barco = NULL;
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
-        if (!sjf_scheduler_dequeue(&sjfQueue, (void**)&barco)) barco = NULL;
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
-        if (!rr_scheduler_dequeue(&rrQueue, (void**)&barco)) barco = NULL;
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
-        if (!strn_scheduler_dequeue(&strnQueue, (void**)&barco)) barco = NULL;
-    }
-    else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
-        if (!edf_scheduler_dequeue(&edfQueue, (void**)&barco)) barco = NULL;
+    // Aquí el scheduler solo saca barcos del lado que tiene el permiso (sentidoActual)
+    if (sentidoActual == 0) { // IZQUIERDA
+        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) fcfs_scheduler_dequeue(&fcfs_Izq, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) priority_scheduler_dequeue(&prio_Izq, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) sjf_scheduler_dequeue(&sjf_Izq, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) rr_scheduler_dequeue(&rr_Izq, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) strn_scheduler_dequeue(&strn_Izq, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) edf_scheduler_dequeue(&edf_Izq, (void**)&barco);
+    } 
+    else { // DERECHA
+        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) fcfs_scheduler_dequeue(&fcfs_Der, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) priority_scheduler_dequeue(&prio_Der, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) sjf_scheduler_dequeue(&sjf_Der, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) rr_scheduler_dequeue(&rr_Der, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) strn_scheduler_dequeue(&strn_Der, (void**)&barco);
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) edf_scheduler_dequeue(&edf_Der, (void**)&barco);
     }
 
     xSemaphoreGive(queueMutex);
@@ -93,12 +93,22 @@ Barco* dequeueBarco() {
 // ===== INIT =====
 // Inicializa las colas y crea la tarea del scheduler
 void iniciarScheduler() {
-    fcfs_scheduler_init(&fcfsQueue);
-    priority_scheduler_init(&priorityQueue);
-    sjf_scheduler_init(&sjfQueue);
-    rr_scheduler_init(&rrQueue);
-    strn_scheduler_init(&strnQueue);
-    edf_scheduler_init(&edfQueue);
+  
+    // Inicializar IZQUIERDA
+    fcfs_scheduler_init(&fcfs_Izq);
+    priority_scheduler_init(&prio_Izq);
+    sjf_scheduler_init(&sjf_Izq);
+    rr_scheduler_init(&rr_Izq);
+    strn_scheduler_init(&strn_Izq);
+    edf_scheduler_init(&edf_Izq);
+
+    // Inicializar DERECHA
+    fcfs_scheduler_init(&fcfs_Der);
+    priority_scheduler_init(&prio_Der);
+    sjf_scheduler_init(&sjf_Der);
+    rr_scheduler_init(&rr_Der);
+    strn_scheduler_init(&strn_Der);
+    edf_scheduler_init(&edf_Der);
 
     // Inicializamos los semáforos
     // El mutex protege el acceso a las colas, y el semáforo "done" se usa para sincronizar con los barcos
@@ -126,14 +136,24 @@ void schedulerTask(void *pvParameters) {
         // =========================
         bool colaVacia = true;
 
-        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) colaVacia = (fcfsQueue.count == 0);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) colaVacia = (priorityQueue.count == 0);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjfQueue.count == 0);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rrQueue.count == 0);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strnQueue.count == 0);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edfQueue.count == 0);
+        if (sentidoActual == 0) {
+            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) colaVacia = (fcfs_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) colaVacia = (prio_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjf_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rr_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strn_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edf_Izq.count == 0);
+        } else {
+            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) colaVacia = (fcfs_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) colaVacia = (prio_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjf_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rr_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strn_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edf_Der.count == 0);
+        }
 
         if (colaVacia) {
+            // Si está vacía, aquí se podria forzar el cambio de sentido
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
         }
@@ -180,7 +200,7 @@ void schedulerTask(void *pvParameters) {
         if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
             printf("%s -> barco %d regresa a la cola con tiempo restante\n", 
                    (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
-            enqueueBarco(proximo);
+            enqueueBarco(proximo); // Se vuelve a encolar en su lado original
         } else {
             printf("Barco %d terminó y libera el canal\n", proximo->id);
         }

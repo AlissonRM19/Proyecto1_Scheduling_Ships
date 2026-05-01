@@ -1,12 +1,12 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FCFS_SCHEDULER_MAX_ITEMS 10
-#define PRIORITY_SCHEDULER_MAX_ITEMS 10
-#define SJF_SCHEDULER_MAX_ITEMS 10
-#define RR_SCHEDULER_MAX_ITEMS 10
-#define STRN_SCHEDULER_MAX_ITEMS 10
-#define RR_QUANTUM 2
+#include <stdint.h>
+#include <stdbool.h>
+
+//==============================
+// CONFIGURACION DE HARDWARE
+//==============================
 
 #define PIN_LED 11
 #define NUM_LEDS 8
@@ -20,40 +20,57 @@
 #define BOTON_PATRULLA_DER 10
 
 
-// ============================
-// SCHEDULERS DISPONIBLES
-// ============================
+//==============================
+// LIMITES DE LAS COLAS
+//==============================
+#define FCFS_SCHEDULER_MAX_ITEMS 10
+#define PRIORITY_SCHEDULER_MAX_ITEMS 10
+#define SJF_SCHEDULER_MAX_ITEMS 10
+#define RR_SCHEDULER_MAX_ITEMS 10
+#define STRN_SCHEDULER_MAX_ITEMS 10
 
-#define SCHEDULER_FCFS      1
-#define SCHEDULER_PRIORITY  2
-#define SCHEDULER_RR        3
-#define RR_QUANTUM          2  // segundos de quantum para Round Robin
-#define SCHEDULER_SJF       4
-#define SCHEDULER_STRN      5
-#define SCHEDULER_EDF       6
 
 // ============================
-// SELECCIÓN ACTUAL
+// ENUMS DE LÓGICA
 // ============================
+typedef enum { 
+    MODO_EQUIDAD = 0, 
+    MODO_LETRERO = 1, 
+    MODO_TICO = 2 
+} ModoFlujo;
 
-#define SCHEDULER_ACTUAL SCHEDULER_RR
-
-// Cambiar aquí para pruebas:
-// FCFS #define SCHEDULER_ACTUAL SCHEDULER_FCFS
-// PRIORITY #define SCHEDULER_ACTUAL SCHEDULER_PRIORITY
-// RR #define SCHEDULER_ACTUAL SCHEDULER_RR
-// SJF #define SCHEDULER_ACTUAL SCHEDULER_SJF
-// STRN #define SCHEDULER_ACTUAL SCHEDULER_STRN
-// EDF #define SCHEDULER_ACTUAL SCHEDULER_EDF
+typedef enum {
+    SCHEDULER_FCFS = 1,
+    SCHEDULER_PRIORITY = 2,
+    SCHEDULER_RR = 3,
+    SCHEDULER_SJF = 4,
+    SCHEDULER_STRN = 5,
+    SCHEDULER_EDF = 6
+} TipoScheduler;
 
 // ============================
-// DEMO MODE
+// ESTRUCTURA GLOBAL
 // ============================
+typedef struct {
+    ModoFlujo modoControl;      
+    TipoScheduler scheduler;    
+    int largoCanal;             
+    int velocidadBarco;         
+    int cantidadListos;         
+    int parametroW;             
+    int tiempoLetrero;          
+    int quantumRR;              
+    bool demoMode;              // Movido aquí para ser dinámico
+} ConfigProyecto;
 
-#define DEMO_MODE false
+extern ConfigProyecto miConfig;
 
-// true  -> crea barcos automáticos
-// false -> usa botones físicos
+// Para mantener compatibilidad con tu código actual de ayer:
+#define SCHEDULER_ACTUAL miConfig.scheduler
+#define RR_QUANTUM miConfig.quantumRR 
 
+#define DEMO_MODE miConfig.demoMode
+
+void cargarConfiguracionInicial();
 
 #endif
