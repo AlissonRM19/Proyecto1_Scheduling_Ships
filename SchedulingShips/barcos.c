@@ -9,6 +9,7 @@
 
 int contadorBarcos = 1;
 
+// Funciones auxiliares para imprimir tipo y lado de los barcos
 const char* nombreTipo(int tipo) {
     if (tipo == 1) return "Normal";
     if (tipo == 2) return "Pesquero";
@@ -16,11 +17,13 @@ const char* nombreTipo(int tipo) {
     return "Desconocido";
 }
 
+// Función para convertir el lado a un nombre legible
 const char* nombreLado(int lado) {
     if (lado == 0) return "Izquierda";
     return "Derecha";
 }
 
+// ===== TAREA DEL BARCO =====
 void barcoTask(void *pvParameters) {
     Barco *barco = (Barco *) pvParameters;
 
@@ -33,11 +36,13 @@ void barcoTask(void *pvParameters) {
     printf("Estado: En cola de listos\n");
     printf("=================================\n");
 
+    // El barco espera a ser programado y luego comienza a cruzar
     while (barco->tiempoRestante > 0) {
         xSemaphoreTake(barco->sem, portMAX_DELAY);
 
         int slice = barco->tiempoRestante;
 
+        // Si el scheduler actual es Round Robin, limitamos el slice al quantum definido
         if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
             slice = RR_QUANTUM;
         }
@@ -57,25 +62,30 @@ void barcoTask(void *pvParameters) {
         xSemaphoreGive(doneSemaphore);
     }
 
+    // Limpieza y eliminación de la tarea
     vSemaphoreDelete(barco->sem);
     free(barco);
     vTaskDelete(NULL);
 }
 
 // ===== CREAR BARCO =====
-
+// Esta función se llama desde la tarea generadora para crear un nuevo barco y agregarlo al scheduler
 void crearBarco(int tipo, int lado) {
     Barco *nuevoBarco = (Barco*) malloc(sizeof(Barco));
 
+    // Verificación de memoria
     if (nuevoBarco == NULL) {
         printf("Error reservando memoria\n");
         return;
     }
 
+    // Inicialización del barco
+    // Asignamos un ID único al barco y configuramos sus atributos según el tipo
     nuevoBarco->id = contadorBarcos++;
     nuevoBarco->tipo = tipo;
     nuevoBarco->lado = lado;
 
+    // Crear un semáforo binario para que el barco espere a ser programado
     nuevoBarco->sem = xSemaphoreCreateBinary();
 
     if (nuevoBarco->sem == NULL) {
@@ -84,6 +94,7 @@ void crearBarco(int tipo, int lado) {
         return;
     }
 
+    // Configuración de tiempo de cruce y prioridad según el tipo de barco
     if (tipo == 1) {
         nuevoBarco->tiempoCruce = 5;
         nuevoBarco->prioridad = 1;
@@ -95,11 +106,12 @@ void crearBarco(int tipo, int lado) {
         nuevoBarco->prioridad = 3;
     }
 
+    // El tiempo restante inicialmente es igual al tiempo de cruce total
     nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
-
+    // Asignamos un deadline aleatorio para el EDF (entre 10 y 30 segundos a partir del momento actual)
     nuevoBarco->deadline = (int)(pdTICKS_TO_MS(xTaskGetTickCount()) / 1000) + (rand() % 20 + 10);
 
-
+    // Agregar el barco al scheduler
     if (!enqueueBarco(nuevoBarco)) {
         printf("Cola llena\n");
         vSemaphoreDelete(nuevoBarco->sem);
@@ -109,6 +121,7 @@ void crearBarco(int tipo, int lado) {
 
     printf("Barco %d agregado al scheduler\n", nuevoBarco->id);
 
+    // Crear la tarea para el barco
     xTaskCreate(
         barcoTask,
         "Barco",

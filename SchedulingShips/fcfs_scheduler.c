@@ -1,8 +1,10 @@
 #include "fcfs_scheduler.h"
 
+// Inicialización de la cola
 void fcfs_scheduler_init(fcfs_scheduler_t *q) {
     if (q == NULL) return;
 
+    // Inicializar los índices y el contador
     q->head = 0;
     q->tail = 0;
     q->count = 0;

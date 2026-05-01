@@ -14,7 +14,7 @@ typedef struct {
     int tiempoRestante;
     int prioridad;
     int deadline;
-    void* sem; // Cambiado a void* si quitas Arduino.h para evitar líos
+    void* sem; 
 } Barco;
 
 // Declaraciones de funciones

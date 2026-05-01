@@ -3,17 +3,21 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+// Inicializa el scheduler
 void edf_scheduler_init(edf_scheduler_t *q) {
     if (q == NULL) return;
     q->count = 0;
+    // Inicializamos el buffer a NULL para evitar basura
     for (int i = 0; i < EDF_SCHEDULER_MAX_ITEMS; i++) {
         q->buffer[i] = NULL;
     }
 }
 
+// Encola un elemento con su deadline, manteniendo el orden por deadline
 bool edf_scheduler_enqueue(edf_scheduler_t *q, void *item, int deadline) {
     if (q == NULL || item == NULL) return false;
 
+    // Verificación de espacio en el scheduler
     if (q->count >= EDF_SCHEDULER_MAX_ITEMS) {
         return false;
     }
@@ -35,11 +39,13 @@ bool edf_scheduler_enqueue(edf_scheduler_t *q, void *item, int deadline) {
         }
     }
 
+    // Insertamos el nuevo elemento en la posición correcta
     q->buffer[i] = item;
     q->count++;
     return true;
 }
 
+// Desencola el elemento más urgente (con menor deadline)
 bool edf_scheduler_dequeue(edf_scheduler_t *q, void **item) {
     if (q == NULL || item == NULL || q->count == 0) {
         return false;

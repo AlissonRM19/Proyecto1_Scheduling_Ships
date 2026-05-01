@@ -2,6 +2,7 @@
 #include "priority_scheduler.h"
 #include "barcos.h" // Necesario para castear void* a Barco*
 
+// Inicializa la cola de prioridad
 void priority_scheduler_init(priority_scheduler_t* q) {
     if (q == NULL) return;
     q->count = 0;
@@ -10,9 +11,11 @@ void priority_scheduler_init(priority_scheduler_t* q) {
     }
 }
 
+// Encola un barco en la posición correcta según su prioridad
 bool priority_scheduler_enqueue(priority_scheduler_t* q, Barco* item, int prioridad) {
     if (q == NULL || item == NULL) return false;
 
+    // Verificamos si hay espacio en la cola
     if (q->count >= MAX_BARCOS_COLA) {
         return false;
     }
@@ -35,6 +38,10 @@ bool priority_scheduler_enqueue(priority_scheduler_t* q, Barco* item, int priori
         }
     }
 
+    // Insertamos el nuevo barco en la posición correcta
+    // item representa el nuevo barco a encolar, y prioridad es su prioridad
+    // q es la cola de prioridad donde se va a insertar el barco
+    // q es de tipo priority_scheduler_t, que contiene un buffer de void* y un contador de elementos
     q->buffer[i] = item;
     q->count++;
     return true;

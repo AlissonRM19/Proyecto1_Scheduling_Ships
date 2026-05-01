@@ -26,7 +26,7 @@ SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
 
 // ===== ENQUEUE =====
-
+// Encola un barco en la cola correspondiente al scheduler activo, usando su prioridad, tiempo de cruce, tiempo restante o deadline según corresponda
 bool enqueueBarco(Barco *barco) {
     if (xSemaphoreTake(queueMutex, portMAX_DELAY) != pdTRUE) {
         return false;
@@ -58,7 +58,8 @@ bool enqueueBarco(Barco *barco) {
 }
 
 // ===== DEQUEUE =====
-
+// Devuelve el siguiente barco a autorizar según el scheduler activo, o NULL si no hay barcos
+// El caller debe verificar si el resultado es NULL antes de usarlo
 Barco* dequeueBarco() {
     Barco *barco = NULL;
 
@@ -90,7 +91,7 @@ Barco* dequeueBarco() {
 }
 
 // ===== INIT =====
-
+// Inicializa las colas y crea la tarea del scheduler
 void iniciarScheduler() {
     fcfs_scheduler_init(&fcfsQueue);
     priority_scheduler_init(&priorityQueue);
@@ -99,9 +100,12 @@ void iniciarScheduler() {
     strn_scheduler_init(&strnQueue);
     edf_scheduler_init(&edfQueue);
 
+    // Inicializamos los semáforos
+    // El mutex protege el acceso a las colas, y el semáforo "done" se usa para sincronizar con los barcos
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
 
+    // Creamos la tarea del scheduler
     xTaskCreate(
         schedulerTask,
         "Scheduler",
@@ -113,6 +117,7 @@ void iniciarScheduler() {
 }
 
 // ===== TASK DEL SCHEDULER =====
+// Esta tarea corre en un loop infinito, verificando si hay barcos en la cola, autorizando su cruce, y esperando a que terminen
 
 void schedulerTask(void *pvParameters) {
     while (true) {
