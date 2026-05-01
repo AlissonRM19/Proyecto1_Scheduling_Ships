@@ -30,7 +30,7 @@ void setup() {
   Serial.println("Presione botones para crear barcos");
   Serial.println("=================================");
 
-  if (DEMO_MODE) {
+  if (miConfig.demoMode) {
     delay(2000);
     Serial.println("Modo demo activado");
   
