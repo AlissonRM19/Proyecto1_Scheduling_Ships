@@ -93,6 +93,21 @@ Barco* dequeueBarco() {
     return barco;
 }
 
+// ===== TAREA DEL LETRERO =====
+// Cambia el sentido del canal cada tiempoLetrero segundos, independiente de los barcos
+void letreroTask(void *pvParameters) {
+    while (true) {
+        // Esperar el tiempo configurado
+        vTaskDelay(pdMS_TO_TICKS(miConfig.tiempoLetrero * 1000));
+
+        // Cambiar sentido
+        sentidoActual = (sentidoActual == 0) ? 1 : 0;
+        printf("[Letrero] Cambio de sentido -> lado %d (%s)\n",
+               sentidoActual,
+               sentidoActual == 0 ? "Izquierda" : "Derecha");
+    }
+}
+
 // ===== INIT =====
 // Inicializa las colas y crea la tarea del scheduler
 void iniciarScheduler() {
@@ -118,6 +133,20 @@ void iniciarScheduler() {
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
 
+
+        // Crear tarea del letrero solo si el modo lo requiere
+    if (miConfig.modoControl == MODO_LETRERO) {
+        xTaskCreate(
+            letreroTask,
+            "Letrero",
+            2048,
+            NULL,
+            2,      // Prioridad menor que schedulerTask (3)
+            NULL
+        );
+    }
+
+    
     // Creamos la tarea del scheduler
     xTaskCreate(
         schedulerTask,
@@ -128,6 +157,9 @@ void iniciarScheduler() {
         NULL
     );
 }
+
+
+
 
 // ===== TASK DEL SCHEDULER =====
 // Esta tarea corre en un loop infinito, verificando si hay barcos en la cola, autorizando su cruce, y esperando a que terminen
