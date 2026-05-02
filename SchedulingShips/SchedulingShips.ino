@@ -4,13 +4,15 @@
 #include "scheduler.h"
 
 // ===== SETUP =====
-
+extern "C" void actualizar_tira_led();
 void setup() {
   Serial.begin(115200);
   delay(2000);
 
   iniciarHardware();
   iniciarScheduler();
+
+  
 
   Serial.println();
   Serial.println("=================================");
@@ -39,7 +41,18 @@ void setup() {
     crearBarco(2, 0); // Pesquero izquierda
   }
 
+  xTaskCreate(
+        led_refresh_task,   // Nombre de la función
+        "LED_Task",         // Nombre rastreable
+        2048,               // Stack size
+        NULL,               // Parámetros
+        2,                  // Prioridad (menor que el scheduler)
+        NULL                // Handle
+    );
+
 }
+
+
 
 // ===== LOOP =====
 
@@ -48,6 +61,7 @@ void loop() {
   // y se crean barcos según el botón presionado
 
   leerBotones();
+  vTaskDelay(pdMS_TO_TICKS(10));
 
   // Aquí después irá:
   // ejecutarFCFS();
@@ -55,4 +69,11 @@ void loop() {
   // ejecutarRoundRobin();
 
   delay(100);
+}
+
+void led_refresh_task(void *pvParameters) {
+    while (1) {
+        actualizar_tira_led(); // <--- Sin nada adentro
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
