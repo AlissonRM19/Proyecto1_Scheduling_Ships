@@ -133,32 +133,94 @@ void iniciarScheduler() {
 // Esta tarea corre en un loop infinito, verificando si hay barcos en la cola, autorizando su cruce, y esperando a que terminen
 
 void schedulerTask(void *pvParameters) {
+
+    // --- Estado para MODO_EQUIDAD ---
+    int barcosPasados = 0; // Cuántos barcos han cruzado consecutivamente en el sentido actual
+
     while (true) {
         // =========================
-        // Verificar si hay barcos
+        // Verificar si hay barcos en el lado actual
         // =========================
         bool colaVacia = true;
 
         if (sentidoActual == 0) {
-            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) colaVacia = (fcfs_Izq.count == 0);
+            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     colaVacia = (fcfs_Izq.count == 0);
             else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) colaVacia = (prio_Izq.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjf_Izq.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rr_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  colaVacia = (sjf_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   colaVacia = (rr_Izq.count == 0);
             else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strn_Izq.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edf_Izq.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  colaVacia = (edf_Izq.count == 0);
         } else {
-            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) colaVacia = (fcfs_Der.count == 0);
+            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     colaVacia = (fcfs_Der.count == 0);
             else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) colaVacia = (prio_Der.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) colaVacia = (sjf_Der.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_RR) colaVacia = (rr_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  colaVacia = (sjf_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   colaVacia = (rr_Der.count == 0);
             else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) colaVacia = (strn_Der.count == 0);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) colaVacia = (edf_Der.count == 0);
+            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  colaVacia = (edf_Der.count == 0);
         }
 
         if (colaVacia) {
-            // Si está vacía, aquí se podria forzar el cambio de sentido
+            // Cola actual vacía: si hay barcos al otro lado, cambiar sentido
+            int otroLado = (sentidoActual == 0) ? 1 : 0;
+            bool otroTieneBarcos = false;
+
+            if (otroLado == 0) {
+                if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     otroTieneBarcos = (fcfs_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) otroTieneBarcos = (prio_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  otroTieneBarcos = (sjf_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   otroTieneBarcos = (rr_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) otroTieneBarcos = (strn_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  otroTieneBarcos = (edf_Izq.count > 0);
+            } else {
+                if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     otroTieneBarcos = (fcfs_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) otroTieneBarcos = (prio_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  otroTieneBarcos = (sjf_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   otroTieneBarcos = (rr_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) otroTieneBarcos = (strn_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  otroTieneBarcos = (edf_Der.count > 0);
+            }
+
+            if (otroTieneBarcos) {
+                sentidoActual = otroLado;
+                barcosPasados = 0;
+                printf("[Equidad] Cola vacía en lado %d, cambiando a lado %d\n",
+                       (sentidoActual == 0 ? 1 : 0), sentidoActual);
+            }
+
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
+        }
+
+        // =========================
+        // MODO EQUIDAD: chequear límite W antes de despachar
+        // =========================
+        if (miConfig.modoControl == MODO_EQUIDAD) {
+            int otroLado = (sentidoActual == 0) ? 1 : 0;
+            bool otroTieneBarcos = false;
+
+            if (otroLado == 0) {
+                if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     otroTieneBarcos = (fcfs_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) otroTieneBarcos = (prio_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  otroTieneBarcos = (sjf_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   otroTieneBarcos = (rr_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) otroTieneBarcos = (strn_Izq.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  otroTieneBarcos = (edf_Izq.count > 0);
+            } else {
+                if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     otroTieneBarcos = (fcfs_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) otroTieneBarcos = (prio_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  otroTieneBarcos = (sjf_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   otroTieneBarcos = (rr_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) otroTieneBarcos = (strn_Der.count > 0);
+                else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  otroTieneBarcos = (edf_Der.count > 0);
+            }
+
+            if (barcosPasados >= miConfig.parametroW && otroTieneBarcos) {
+                sentidoActual = otroLado;
+                barcosPasados = 0;
+                printf("[Equidad] W=%d alcanzado, cambiando a lado %d\n",
+                       miConfig.parametroW, sentidoActual);
+                continue; // Volver al inicio con el nuevo sentido
+            }
         }
 
         // =========================
@@ -168,7 +230,7 @@ void schedulerTask(void *pvParameters) {
         if (proximo == NULL) continue;
 
         // =========================
-        // Mostrar scheduler activo (Uso de printf)
+        // Mostrar scheduler activo
         // =========================
         if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
             printf("FCFS -> turno para barco %d\n", proximo->id);
@@ -200,15 +262,17 @@ void schedulerTask(void *pvParameters) {
         // =========================
         xSemaphoreTake(doneSemaphore, portMAX_DELAY);
 
-        barco_en_canal = NULL; //Limpiar al terminar
+        barco_en_canal = NULL;
 
-        // Re-encolar si es necesario (Preemptive/Quantum)
+        // Re-encolar si es necesario (RR / STRN)
         if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
-            printf("%s -> barco %d regresa a la cola con tiempo restante\n", 
+            printf("%s -> barco %d regresa a la cola con tiempo restante\n",
                    (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
-            enqueueBarco(proximo); // Se vuelve a encolar en su lado original
+            enqueueBarco(proximo);
+            // No incrementar barcosPasados: el barco no completó su cruce todavía
         } else {
             printf("Barco %d terminó y libera el canal\n", proximo->id);
+            barcosPasados++; // Solo cuenta cuando el barco cruzó completamente
         }
     }
 }
