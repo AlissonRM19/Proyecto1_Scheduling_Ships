@@ -4,8 +4,8 @@
 // Inicialización de la instancia global con valores por defecto
 // Estos son los valores que el sistema usará al arrancar
 ConfigProyecto miConfig = {
-    .modoControl = MODO_LETRERO,   // Empieza con modo tiempo
-    .scheduler = SCHEDULER_RR,         // Algoritmo por defecto: Round Robin
+    .modoControl = MODO_TICO,   // Empieza con modo tiempo
+    .scheduler = SCHEDULER_FCFS,         // Algoritmo por defecto: First-Come, First-Served
     .largoCanal = 5,               // 5 LEDs de largo para el canal
     .velocidadBarco = 1000,        // 1 segundo para moverse entre LEDs
     .cantidadListos = 4,           // Máximo 4 barcos por lado
