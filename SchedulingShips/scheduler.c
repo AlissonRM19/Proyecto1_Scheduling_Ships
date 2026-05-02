@@ -96,10 +96,13 @@ Barco* dequeueBarco() {
 }
 
 // ===== TAREA DEL LETRERO =====
-// Cambia sentidoActual cada tiempoLetrero segundos, independiente del canal
+// Cambia el sentido del canal cada tiempoLetrero segundos, independiente de los barcos
 void letreroTask(void *pvParameters) {
     while (true) {
+        // Esperar el tiempo configurado
         vTaskDelay(pdMS_TO_TICKS(miConfig.tiempoLetrero * 1000));
+
+        // Cambiar sentido
         sentidoActual = (sentidoActual == 0) ? 1 : 0;
         printf("[Letrero] Cambio de sentido -> lado %d (%s)\n",
                sentidoActual,
@@ -126,13 +129,33 @@ void iniciarScheduler() {
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
 
-    // Crear tarea del letrero solo si el modo lo requiere
+
+        // Crear tarea del letrero solo si el modo lo requiere
     if (miConfig.modoControl == MODO_LETRERO) {
-        xTaskCreate(letreroTask, "Letrero", 2048, NULL, 2, NULL);
+        xTaskCreate(
+            letreroTask,
+            "Letrero",
+            2048,
+            NULL,
+            2,      // Prioridad menor que schedulerTask (3)
+            NULL
+        );
     }
 
-    xTaskCreate(schedulerTask, "Scheduler", 4096, NULL, 3, NULL);
+    
+    // Creamos la tarea del scheduler
+    xTaskCreate(
+        schedulerTask,
+        "Scheduler",
+        4096,
+        NULL,
+        3,
+        NULL
+    );
 }
+
+
+
 
 // ===== TASK DEL SCHEDULER =====
 void schedulerTask(void *pvParameters) {

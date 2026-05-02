@@ -22,6 +22,7 @@ bool enqueueBarco(Barco *barco);
 Barco* dequeueBarco();
 
 void letreroTask(void *pvParameters);
+
 // Task principal del scheduler
 void schedulerTask(void *pvParameters);
 
