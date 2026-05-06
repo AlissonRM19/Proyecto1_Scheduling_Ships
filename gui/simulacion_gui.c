@@ -1,9 +1,4 @@
 /*
- * simulacion_gui.c — Simulacion grafica del Canal de Barcos
- *
- * Reimplementa la logica del ESP32/FreeRTOS como una simulacion en PC
- * usando raylib para graficos 2D.
- *
  * Controles:
  *   1/2/3 -> Agregar barco Normal / Pesquero / Patrulla al lado IZQUIERDO
  *   4/5/6 -> Agregar barco Normal / Pesquero / Patrulla al lado DERECHO
@@ -11,9 +6,6 @@
  *   M     -> Ciclar modo de flujo (TICO -> EQUIDAD -> LETRERO)
  *   W     -> Salir elegantemente
  *
- * Compilar con MinGW + raylib:
- *   gcc simulacion_gui.c -o simulacion_gui.exe -I./raylib/include ^
- *       -L./raylib/lib -lraylib -lopengl32 -lgdi32 -lwinmm -mwindows
  */
 
 #include "raylib.h"
