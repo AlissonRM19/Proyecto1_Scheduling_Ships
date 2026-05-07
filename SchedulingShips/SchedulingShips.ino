@@ -57,10 +57,28 @@ void setup() {
 // ===== LOOP =====
 
 void loop() {
-  // Aquí solo se leen botones
-  // y se crean barcos según el botón presionado
-
+  // Leer botones fisicos
   leerBotones();
+
+  // Leer comandos enviados desde la GUI por serial: "ADD,tipo,lado\n"
+  static char cmdBuf[32];
+  static int  cmdLen = 0;
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n') {
+      cmdBuf[cmdLen] = '\0';
+      cmdLen = 0;
+      if (cmdBuf[0]=='A' && cmdBuf[1]=='D' && cmdBuf[2]=='D' && cmdBuf[3]==',') {
+        int tipo = cmdBuf[4] - '0';
+        int lado = cmdBuf[6] - '0';
+        if (tipo >= 1 && tipo <= 3 && (lado == 0 || lado == 1))
+          crearBarco(tipo, lado);
+      }
+    } else if (c != '\r' && cmdLen < 30) {
+      cmdBuf[cmdLen++] = c;
+    }
+  }
+
   vTaskDelay(pdMS_TO_TICKS(10));
 
   // Aquí después irá:
