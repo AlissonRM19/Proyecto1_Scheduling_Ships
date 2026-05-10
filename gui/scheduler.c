@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "scheduler.h"
 #include "ship_pool.h"
 #include "serial.h"
