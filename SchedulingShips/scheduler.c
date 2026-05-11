@@ -104,6 +104,7 @@ void letreroTask(void *pvParameters) {
 
         // Cambiar sentido
         sentidoActual = (sentidoActual == 0) ? 1 : 0;
+        printf("GUI:DIR,%d\n", sentidoActual);
         printf("[Letrero] Cambio de sentido -> lado %d (%s)\n",
                sentidoActual,
                sentidoActual == 0 ? "Izquierda" : "Derecha");
@@ -112,6 +113,11 @@ void letreroTask(void *pvParameters) {
 
 // ===== INIT =====
 void iniciarScheduler() {
+    /* Estado inicial para la GUI */
+    printf("GUI:SCH,%d\n", SCHEDULER_ACTUAL);
+    printf("GUI:MODO,%d\n", miConfig.modoControl);
+    printf("GUI:DIR,%d\n", sentidoActual);
+
     fcfs_scheduler_init(&fcfs_Izq);
     priority_scheduler_init(&prio_Izq);
     sjf_scheduler_init(&sjf_Izq);
@@ -181,6 +187,7 @@ void schedulerTask(void *pvParameters) {
             // para no cambiar innecesariamente mientras el canal está libre
             if (!hayBarcosEnLado(sentidoActual)) {
                 sentidoActual = (sentidoActual == 0) ? 1 : 0;
+                printf("GUI:DIR,%d\n", sentidoActual);
                 printf("[Tico] Sin barcos en lado actual, cambiando a lado %d (%s)\n",
                        sentidoActual, sentidoActual == 0 ? "Izquierda" : "Derecha");
             }
@@ -196,6 +203,14 @@ void schedulerTask(void *pvParameters) {
             else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) printf("STRN -> turno para barco %d | tiempo restante %ds\n", proximo->id, proximo->tiempoRestante);
             else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  printf("EDF -> turno para barco %d | deadline %d\n", proximo->id, proximo->deadline);
 
+            {
+                int guiSlice = proximo->tiempoRestante;
+                if (SCHEDULER_ACTUAL == SCHEDULER_RR && guiSlice > RR_QUANTUM) guiSlice = RR_QUANTUM;
+                printf("GUI:CROSS,%d,%d,%d,%d,%d,%d\n",
+                    proximo->id, proximo->tipo, proximo->lado,
+                    guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
+            }
+
             barco_en_canal = proximo;
             xSemaphoreGive(proximo->sem);
             xSemaphoreTake(doneSemaphore, portMAX_DELAY);
@@ -204,9 +219,11 @@ void schedulerTask(void *pvParameters) {
             if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
                 printf("%s -> barco %d regresa a la cola con tiempo restante\n",
                        (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
+                printf("GUI:RETURN,%d,%d\n", proximo->id, proximo->tiempoRestante);
                 enqueueBarco(proximo);
             } else {
                 printf("Barco %d terminó y libera el canal\n", proximo->id);
+                printf("GUI:DONE,%d\n", proximo->id);
             }
             continue; // Volver al inicio del loop (modo Tico no usa el resto)
         }
@@ -222,6 +239,7 @@ void schedulerTask(void *pvParameters) {
             if (hayBarcosEnLado(otroLado)) {
                 sentidoActual = otroLado;
                 barcosPasados = 0;
+                printf("GUI:DIR,%d\n", sentidoActual);
                 printf("[%s] Cola vacía en lado %d, cambiando a lado %d (%s)\n",
                        miConfig.modoControl == MODO_EQUIDAD ? "Equidad" : "Letrero",
                        (sentidoActual == 0 ? 1 : 0), sentidoActual,
@@ -239,6 +257,7 @@ void schedulerTask(void *pvParameters) {
             if (barcosPasados >= miConfig.parametroW && hayBarcosEnLado(otroLado)) {
                 sentidoActual = otroLado;
                 barcosPasados = 0;
+                printf("GUI:DIR,%d\n", sentidoActual);
                 printf("[Equidad] W=%d alcanzado, cambiando a lado %d (%s)\n",
                        miConfig.parametroW, sentidoActual,
                        sentidoActual == 0 ? "Izquierda" : "Derecha");
@@ -259,6 +278,14 @@ void schedulerTask(void *pvParameters) {
         else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) printf("STRN -> turno para barco %d | tiempo restante %ds\n", proximo->id, proximo->tiempoRestante);
         else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  printf("EDF -> turno para barco %d | deadline %d\n", proximo->id, proximo->deadline);
 
+        {
+            int guiSlice = proximo->tiempoRestante;
+            if (SCHEDULER_ACTUAL == SCHEDULER_RR && guiSlice > RR_QUANTUM) guiSlice = RR_QUANTUM;
+            printf("GUI:CROSS,%d,%d,%d,%d,%d,%d\n",
+                proximo->id, proximo->tipo, proximo->lado,
+                guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
+        }
+
         barco_en_canal = proximo;
         xSemaphoreGive(proximo->sem);
         xSemaphoreTake(doneSemaphore, portMAX_DELAY);
@@ -267,9 +294,11 @@ void schedulerTask(void *pvParameters) {
         if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
             printf("%s -> barco %d regresa a la cola con tiempo restante\n",
                    (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
+            printf("GUI:RETURN,%d,%d\n", proximo->id, proximo->tiempoRestante);
             enqueueBarco(proximo);
         } else {
             printf("Barco %d terminó y libera el canal\n", proximo->id);
+            printf("GUI:DONE,%d\n", proximo->id);
             barcosPasados++;
         }
     }

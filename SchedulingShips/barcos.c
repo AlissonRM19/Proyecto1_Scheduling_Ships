@@ -136,6 +136,10 @@ void crearBarco(int tipo, int lado) {
     }
 
     printf("Barco %d agregado al scheduler\n", nuevoBarco->id);
+    /* Mensaje estructurado para la GUI */
+    printf("GUI:ADD,%d,%d,%d,%d,%d,%d\n",
+        nuevoBarco->id, nuevoBarco->tipo, nuevoBarco->lado,
+        nuevoBarco->prioridad, nuevoBarco->tiempoRestante, nuevoBarco->deadline);
 
     // Crear la tarea para el barco
     xTaskCreate(
