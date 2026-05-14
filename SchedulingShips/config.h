@@ -72,4 +72,6 @@ extern ConfigProyecto miConfig;
 
 void cargarConfiguracionInicial();
 
+#define MAX_BARCOS_CANAL 3
+
 #endif

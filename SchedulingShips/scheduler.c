@@ -24,9 +24,12 @@ edf_scheduler_t edf_Izq, edf_Der;
 
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
+SemaphoreHandle_t sem_espacio_canal;
 
-int sentidoActual = 0;
-Barco* barco_en_canal = NULL;
+
+Barco* barcos_activos[MAX_BARCOS_CANAL] = {NULL, NULL, NULL};
+int barcos_en_canal_count = 0;
+int sentido_actual = 0;
 
 // ===== HELPER: hay barcos en un lado? =====
 // Evita repetir el bloque if/else de schedulers en cada verificación
@@ -76,7 +79,7 @@ bool enqueueBarco(Barco *barco) {
 Barco* dequeueBarco() {
     Barco *barco = NULL;
     if (xSemaphoreTake(queueMutex, portMAX_DELAY) != pdTRUE) return NULL;
-    if (sentidoActual == 0) {
+    if (sentido_actual == 0) {
         if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     fcfs_scheduler_dequeue(&fcfs_Izq, (void**)&barco);
         else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) priority_scheduler_dequeue(&prio_Izq, (void**)&barco);
         else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  sjf_scheduler_dequeue(&sjf_Izq, (void**)&barco);
@@ -103,11 +106,11 @@ void letreroTask(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(miConfig.tiempoLetrero * 1000));
 
         // Cambiar sentido
-        sentidoActual = (sentidoActual == 0) ? 1 : 0;
-        printf("GUI:DIR,%d\n", sentidoActual);
+        sentido_actual = (sentido_actual == 0) ? 1 : 0;
+        printf("GUI:DIR,%d\n", sentido_actual);
         printf("[Letrero] Cambio de sentido -> lado %d (%s)\n",
-               sentidoActual,
-               sentidoActual == 0 ? "Izquierda" : "Derecha");
+               sentido_actual,
+               sentido_actual == 0 ? "Izquierda" : "Derecha");
     }
 }
 
@@ -116,7 +119,7 @@ void iniciarScheduler() {
     /* Estado inicial para la GUI */
     printf("GUI:SCH,%d\n", SCHEDULER_ACTUAL);
     printf("GUI:MODO,%d\n", miConfig.modoControl);
-    printf("GUI:DIR,%d\n", sentidoActual);
+    printf("GUI:DIR,%d\n", sentido_actual);
 
     fcfs_scheduler_init(&fcfs_Izq);
     priority_scheduler_init(&prio_Izq);
@@ -134,6 +137,7 @@ void iniciarScheduler() {
 
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
+    sem_espacio_canal = xSemaphoreCreateCounting(3, 3);
 
 
         // Crear tarea del letrero solo si el modo lo requiere
@@ -185,16 +189,24 @@ void schedulerTask(void *pvParameters) {
 
             // Tomar el lado que tenga barcos; si ambos tienen, mantener el sentido actual
             // para no cambiar innecesariamente mientras el canal está libre
-            if (!hayBarcosEnLado(sentidoActual)) {
-                sentidoActual = (sentidoActual == 0) ? 1 : 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
+            if (!hayBarcosEnLado(sentido_actual)) {
+                sentido_actual = (sentido_actual == 0) ? 1 : 0;
+                printf("GUI:DIR,%d\n", sentido_actual);
                 printf("[Tico] Sin barcos en lado actual, cambiando a lado %d (%s)\n",
-                       sentidoActual, sentidoActual == 0 ? "Izquierda" : "Derecha");
+                       sentido_actual, sentido_actual == 0 ? "Izquierda" : "Derecha");
             }
 
+            xSemaphoreTake(sem_espacio_canal, portMAX_DELAY);
             // Despachar el próximo barco del lado actual
             Barco *proximo = dequeueBarco();
-            if (proximo == NULL) continue;
+
+            
+            if (proximo == NULL) {
+              xSemaphoreGive(sem_espacio_canal); // Devolver espacio si no había barco
+
+              
+              continue;
+            }
 
             if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     printf("FCFS -> turno para barco %d\n", proximo->id);
             else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) printf("PRIORITY -> turno para barco %d | prioridad %d\n", proximo->id, proximo->prioridad);
@@ -211,10 +223,10 @@ void schedulerTask(void *pvParameters) {
                     guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
             }
 
-            barco_en_canal = proximo;
+            //barco_en_canal = proximo;
             xSemaphoreGive(proximo->sem);
             xSemaphoreTake(doneSemaphore, portMAX_DELAY);
-            barco_en_canal = NULL;
+            //barco_en_canal = NULL;
 
             if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
                 printf("%s -> barco %d regresa a la cola con tiempo restante\n",
@@ -231,19 +243,19 @@ void schedulerTask(void *pvParameters) {
         // =========================
         // MODO EQUIDAD / LETRERO: verificar si hay barcos en el lado actual
         // =========================
-        bool colaVacia = !hayBarcosEnLado(sentidoActual);
+        bool colaVacia = !hayBarcosEnLado(sentido_actual);
 
         if (colaVacia) {
             // Cola actual vacía: si hay barcos al otro lado, cambiar sentido
-            int otroLado = (sentidoActual == 0) ? 1 : 0;
+            int otroLado = (sentido_actual == 0) ? 1 : 0;
             if (hayBarcosEnLado(otroLado)) {
-                sentidoActual = otroLado;
+                sentido_actual = otroLado;
                 barcosPasados = 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
+                printf("GUI:DIR,%d\n", sentido_actual);
                 printf("[%s] Cola vacía en lado %d, cambiando a lado %d (%s)\n",
                        miConfig.modoControl == MODO_EQUIDAD ? "Equidad" : "Letrero",
-                       (sentidoActual == 0 ? 1 : 0), sentidoActual,
-                       sentidoActual == 0 ? "Izquierda" : "Derecha");
+                       (sentido_actual == 0 ? 1 : 0), sentido_actual,
+                       sentido_actual == 0 ? "Izquierda" : "Derecha");
             }
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
@@ -253,14 +265,14 @@ void schedulerTask(void *pvParameters) {
         // MODO EQUIDAD: chequear límite W antes de despachar
         // =========================
         if (miConfig.modoControl == MODO_EQUIDAD) {
-            int otroLado = (sentidoActual == 0) ? 1 : 0;
+            int otroLado = (sentido_actual == 0) ? 1 : 0;
             if (barcosPasados >= miConfig.parametroW && hayBarcosEnLado(otroLado)) {
-                sentidoActual = otroLado;
+                sentido_actual = otroLado;
                 barcosPasados = 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
+                printf("GUI:DIR,%d\n", sentido_actual);
                 printf("[Equidad] W=%d alcanzado, cambiando a lado %d (%s)\n",
-                       miConfig.parametroW, sentidoActual,
-                       sentidoActual == 0 ? "Izquierda" : "Derecha");
+                       miConfig.parametroW, sentido_actual,
+                       sentido_actual == 0 ? "Izquierda" : "Derecha");
                 continue;
             }
         }
@@ -286,10 +298,10 @@ void schedulerTask(void *pvParameters) {
                 guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
         }
 
-        barco_en_canal = proximo;
+        //barco_en_canal = proximo;
         xSemaphoreGive(proximo->sem);
         xSemaphoreTake(doneSemaphore, portMAX_DELAY);
-        barco_en_canal = NULL;
+        //barco_en_canal = NULL;
 
         if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
             printf("%s -> barco %d regresa a la cola con tiempo restante\n",

@@ -9,6 +9,8 @@
 
 int contadorBarcos = 1;
 
+#define MAX_BARCOS_CANAL 3
+
 // Funciones auxiliares para imprimir tipo y lado de los barcos
 const char* nombreTipo(int tipo) {
     if (tipo == 1) return "Normal";
@@ -26,61 +28,97 @@ const char* nombreLado(int lado) {
 // ===== TAREA DEL BARCO =====
 void barcoTask(void *pvParameters) {
     Barco *barco = (Barco *) pvParameters;
+    int slot_asignado = -1;
 
-    printf("=================================\n");
-    printf("Barco creado -> ID: %d\n", barco->id);
-    printf("Tipo: %s\n", nombreTipo(barco->tipo));
-    printf("Lado de origen: %s\n", nombreLado(barco->lado));
-    printf("Tiempo de cruce: %d\n", barco->tiempoCruce);
-    printf("Prioridad: %d\n", barco->prioridad);
-    printf("Estado: En cola de listos\n");
-    printf("=================================\n");
+    // Referencias a variables definidas en otro archivo (Linker las buscará)
+    extern int barcos_en_canal_count;
+    extern int sentido_actual;
+    extern Barco* barcos_activos[MAX_BARCOS_CANAL];
+    extern SemaphoreHandle_t sem_espacio_canal;
+    extern SemaphoreHandle_t doneSemaphore;
 
-    // El barco espera a ser programado y luego comienza a cruzar
+    xSemaphoreTake(barco->sem, portMAX_DELAY); 
+
+    // Registrar en el canal
+    for (int i = 0; i < MAX_BARCOS_CANAL; i++) {
+        if (barcos_activos[i] == NULL) {
+            barcos_activos[i] = barco;
+            slot_asignado = i;
+            break;
+        }
+    }
+
+    barcos_en_canal_count++;
+    sentido_actual = barco->lado;
+
+    // --- LÓGICA DE CRUCE (Soporta RR y Pipeline) ---
     while (barco->tiempoRestante > 0) {
-        xSemaphoreTake(barco->sem, portMAX_DELAY);
+        
+        // Si es Round Robin y no es la primera vez, esperamos permiso del Scheduler
+        if (barco->tiempoRestante < barco->tiempoCruce) {
+            xSemaphoreTake(barco->sem, portMAX_DELAY);
+        }
 
         int slice = barco->tiempoRestante;
-
-        // Si el scheduler actual es Round Robin, limitamos el slice al quantum definido
         if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
             slice = RR_QUANTUM;
         }
 
-        printf("Barco %d comienza a cruzar el canal...\n", barco->id);
-
-        // --- LÓGICA DE MOVIMIENTO LED ---
-        if (barco->lado == 0) { // Viene de IZQ a DER
-            for (int p = 4; p <= 8; p++) {
+        // --- MOVIMIENTO POR SECCIONES (LEDs 4 al 8) ---
+        if (barco->lado == 0) { // IZQUIERDA -> DERECHA
+            // Calculamos el avance basado en el tiempo transcurrido
+            int progreso = barco->tiempoCruce - barco->tiempoRestante;
+            int led_inicio = 4 + progreso;
+            int led_fin = led_inicio + slice - 1; // El -1 evita que salte un LED de más
+        
+            // Aseguramos que nunca toque el LED 9 o pase del 8
+            if (led_inicio > 8) led_inicio = 8;
+            if (led_fin > 8) led_fin = 8;
+        
+            for (int p = led_inicio; p <= led_fin; p++) {
                 barco->posicion = p;
-                // Usamos una fracción del tiempo de cruce para cada paso de LED
-                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5)); 
+                vTaskDelay(pdMS_TO_TICKS(200)); 
             }
-        } else { // Viene de DER a IZQ
-            for (int p = 8; p >= 4; p--) {
+        } else { // DERECHA -> IZQUIERDA
+            int progreso = barco->tiempoCruce - barco->tiempoRestante;
+            int led_inicio = 8 - progreso;
+            int led_fin = led_inicio - (slice - 1);
+        
+            if (led_inicio < 4) led_inicio = 4;
+            if (led_fin < 4) led_fin = 4;
+        
+            for (int p = led_inicio; p >= led_fin; p--) {
                 barco->posicion = p;
-                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5));
+                vTaskDelay(pdMS_TO_TICKS(200));
             }
         }
-
-        vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
-
+        // Simulación del tiempo de cruce físico
+        vTaskDelay(pdMS_TO_TICKS(slice * 1000));
         barco->tiempoRestante -= slice;
 
-        if (barco->tiempoRestante > 0) {
-            printf("Barco %d pausa, quedan %ds\n", barco->id, barco->tiempoRestante);
-        } else {
-            printf("Barco %d completó el cruce!\n", barco->id);
-        }
-
+        // Avisamos al Scheduler que terminamos esta ráfaga/cruce
+        extern SemaphoreHandle_t doneSemaphore;
         xSemaphoreGive(doneSemaphore);
     }
 
-    // Limpieza y eliminación de la tarea
+    printf("GUI:DONE,%d\n", barco->id);
+    
+    if (slot_asignado != -1) {
+        barcos_activos[slot_asignado] = NULL;
+    }
+
+    barcos_en_canal_count--; // <--- Aquí es donde fallaba el Linker
+
+    if (sem_espacio_canal != NULL) {
+        xSemaphoreGive(sem_espacio_canal);
+    }
+
     vSemaphoreDelete(barco->sem);
     free(barco);
     vTaskDelete(NULL);
 }
+
+
 
 // ===== CREAR BARCO =====
 // Esta función se llama desde la tarea generadora para crear un nuevo barco y agregarlo al scheduler
@@ -92,7 +130,7 @@ void crearBarco(int tipo, int lado) {
         printf("Error reservando memoria\n");
         return;
     }
-    nuevoBarco->posicion = (lado == 0) ? 0 : 12; // Espera en los extremos
+    nuevoBarco->posicion = (lado == 0) ? 3 : 10; // Espera en los extremos
 
     // Inicialización del barco
     // Asignamos un ID único al barco y configuramos sus atributos según el tipo
