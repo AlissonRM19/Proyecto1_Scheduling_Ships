@@ -131,7 +131,7 @@ void actualizar_tira_led() {
 
     // --- SECCIÓN 2: EL CANAL (LEDs 5 al 10) ---
     // 1. Limpiamos los LEDs del canal (del 4 al 9) para que no queden rastros
-    for (int i = 4; i <= 9; i++) {
+    for (int i = 6; i <= 10; i++) {
         led_set_pixel(i, 0, 0, 0);
     }
     

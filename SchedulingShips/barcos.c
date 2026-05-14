@@ -9,7 +9,7 @@
 
 int contadorBarcos = 1;
 
-#define MAX_BARCOS_CANAL 3
+#define MAX_BARCOS_CANAL 5
 
 // Funciones auxiliares para imprimir tipo y lado de los barcos
 const char* nombreTipo(int tipo) {
@@ -52,52 +52,56 @@ void barcoTask(void *pvParameters) {
     sentido_actual = barco->lado;
 
     // --- LÓGICA DE CRUCE (Soporta RR y Pipeline) ---
+    // --- LÓGICA DE CRUCE VISUAL ---
     while (barco->tiempoRestante > 0) {
-        
-        // Si es Round Robin y no es la primera vez, esperamos permiso del Scheduler
+    
+        // RR espera permiso nuevamente
         if (barco->tiempoRestante < barco->tiempoCruce) {
             xSemaphoreTake(barco->sem, portMAX_DELAY);
         }
-
+    
         int slice = barco->tiempoRestante;
+    
         if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
             slice = RR_QUANTUM;
         }
-
-        // --- MOVIMIENTO POR SECCIONES (LEDs 4 al 8) ---
-        if (barco->lado == 0) { // IZQUIERDA -> DERECHA
-            // Calculamos el avance basado en el tiempo transcurrido
-            int progreso = barco->tiempoCruce - barco->tiempoRestante;
-            int led_inicio = 4 + progreso;
-            int led_fin = led_inicio + slice - 1; // El -1 evita que salte un LED de más
-        
-            // Aseguramos que nunca toque el LED 9 o pase del 8
-            if (led_inicio > 8) led_inicio = 8;
-            if (led_fin > 8) led_fin = 8;
-        
-            for (int p = led_inicio; p <= led_fin; p++) {
-                barco->posicion = p;
-                vTaskDelay(pdMS_TO_TICKS(200)); 
-            }
-        } else { // DERECHA -> IZQUIERDA
-            int progreso = barco->tiempoCruce - barco->tiempoRestante;
-            int led_inicio = 8 - progreso;
-            int led_fin = led_inicio - (slice - 1);
-        
-            if (led_inicio < 4) led_inicio = 4;
-            if (led_fin < 4) led_fin = 4;
-        
-            for (int p = led_inicio; p >= led_fin; p--) {
-                barco->posicion = p;
-                vTaskDelay(pdMS_TO_TICKS(200));
-            }
+    
+        // LEDs reales del canal
+        int inicio;
+        int fin;
+        int paso;
+    
+        if (barco->lado == 0) {
+            // IZQ -> DER
+            inicio = 5;
+            fin = 10;
+            paso = 1;
+        } else {
+            // DER -> IZQ
+            inicio = 10;
+            fin = 5;
+            paso = -1;
         }
-        // Simulación del tiempo de cruce físico
-        vTaskDelay(pdMS_TO_TICKS(slice * 1000));
+    
+        // Cantidad total de LEDs del canal
+        int total_leds = 5;
+    
+        // Tiempo por LED
+        int delay_por_led = (slice * 1000) / total_leds;
+    
+        // Movimiento visual
+        for (int p = inicio;
+             (paso == 1) ? (p <= fin) : (p >= fin);
+             p += paso) {
+    
+            barco->posicion = p;
+    
+            vTaskDelay(pdMS_TO_TICKS(delay_por_led));
+        }
+    
         barco->tiempoRestante -= slice;
-
-        // Avisamos al Scheduler que terminamos esta ráfaga/cruce
-        extern SemaphoreHandle_t doneSemaphore;
+    
+        // Avisar scheduler
         xSemaphoreGive(doneSemaphore);
     }
 
@@ -130,7 +134,7 @@ void crearBarco(int tipo, int lado) {
         printf("Error reservando memoria\n");
         return;
     }
-    nuevoBarco->posicion = (lado == 0) ? 3 : 10; // Espera en los extremos
+    nuevoBarco->posicion = (lado == 0) ? 4 : 11; // Espera en los extremos
 
     // Inicialización del barco
     // Asignamos un ID único al barco y configuramos sus atributos según el tipo
