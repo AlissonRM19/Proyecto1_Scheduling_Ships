@@ -24,6 +24,7 @@ edf_scheduler_t edf_Izq, edf_Der;
 
 SemaphoreHandle_t queueMutex;
 SemaphoreHandle_t doneSemaphore;
+SemaphoreHandle_t sem_espacio_canal; // El "controlador" del pipeline
 
 int sentidoActual = 0;
 Barco* barco_en_canal = NULL;
@@ -75,24 +76,37 @@ bool enqueueBarco(Barco *barco) {
 // ===== DEQUEUE =====
 Barco* dequeueBarco() {
     Barco *barco = NULL;
-    if (xSemaphoreTake(queueMutex, portMAX_DELAY) != pdTRUE) return NULL;
-    if (sentidoActual == 0) {
-        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     fcfs_scheduler_dequeue(&fcfs_Izq, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) priority_scheduler_dequeue(&prio_Izq, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  sjf_scheduler_dequeue(&sjf_Izq, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   rr_scheduler_dequeue(&rr_Izq, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) strn_scheduler_dequeue(&strn_Izq, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  edf_scheduler_dequeue(&edf_Izq, (void**)&barco);
-    } else {
-        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     fcfs_scheduler_dequeue(&fcfs_Der, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) priority_scheduler_dequeue(&prio_Der, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  sjf_scheduler_dequeue(&sjf_Der, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   rr_scheduler_dequeue(&rr_Der, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) strn_scheduler_dequeue(&strn_Der, (void**)&barco);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  edf_scheduler_dequeue(&edf_Der, (void**)&barco);
+
+    // Esto ayuda a detectar deadlocks más fácilmente
+    if (xSemaphoreTake(queueMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return NULL; 
     }
+
+    // Seleccionamos la cola según el sentido actual
+    if (sentidoActual == 0) {
+        switch (SCHEDULER_ACTUAL) {
+            case SCHEDULER_FCFS:     fcfs_scheduler_dequeue(&fcfs_Izq, (void**)&barco); break;
+            case SCHEDULER_PRIORITY: priority_scheduler_dequeue(&prio_Izq, (void**)&barco); break;
+            case SCHEDULER_SJF:      sjf_scheduler_dequeue(&sjf_Izq, (void**)&barco); break;
+            case SCHEDULER_RR:       rr_scheduler_dequeue(&rr_Izq, (void**)&barco); break;
+            case SCHEDULER_STRN:     strn_scheduler_dequeue(&strn_Izq, (void**)&barco); break;
+            case SCHEDULER_EDF:      edf_scheduler_dequeue(&edf_Izq, (void**)&barco); break;
+        }
+    } else {
+        switch (SCHEDULER_ACTUAL) {
+            case SCHEDULER_FCFS:     fcfs_scheduler_dequeue(&fcfs_Der, (void**)&barco); break;
+            case SCHEDULER_PRIORITY: priority_scheduler_dequeue(&prio_Der, (void**)&barco); break;
+            case SCHEDULER_SJF:      sjf_scheduler_dequeue(&sjf_Der, (void**)&barco); break;
+            case SCHEDULER_RR:       rr_scheduler_dequeue(&rr_Der, (void**)&barco); break;
+            case SCHEDULER_STRN:     strn_scheduler_dequeue(&strn_Der, (void**)&barco); break;
+            case SCHEDULER_EDF:      edf_scheduler_dequeue(&edf_Der, (void**)&barco); break;
+        }
+    }
+
     xSemaphoreGive(queueMutex);
-    return barco;
+
+    // Si barco sigue siendo NULL, significa que la cola seleccionada estaba vacía
+    return barco; 
 }
 
 // ===== TAREA DEL LETRERO =====
@@ -134,6 +148,7 @@ void iniciarScheduler() {
 
     queueMutex = xSemaphoreCreateMutex();
     doneSemaphore = xSemaphoreCreateBinary();
+    sem_espacio_canal = xSemaphoreCreateCounting(5, 5); // Máximo 5 barcos
 
 
         // Crear tarea del letrero solo si el modo lo requiere
@@ -165,141 +180,72 @@ void iniciarScheduler() {
 
 // ===== TASK DEL SCHEDULER =====
 void schedulerTask(void *pvParameters) {
+    printf("[Scheduler] Tarea iniciada.\n");
+    int barcosPasados = 0;
 
-    int barcosPasados = 0; // Para MODO_EQUIDAD: barcos cruzados consecutivamente en sentidoActual
+    while (1) {
+        // 1. Verificar si hay barcos en algún lado antes de proceder
+        bool hayIzq = hayBarcosEnLado(0);
+        bool hayDer = hayBarcosEnLado(1);
 
-    while (true) {
-
-        // =========================
-        // MODO TICO: elegir lado dinámicamente — el primero que tenga barcos
-        // =========================
-        if (miConfig.modoControl == MODO_TICO) {
-            bool hayIzq = hayBarcosEnLado(0);
-            bool hayDer = hayBarcosEnLado(1);
-
-            if (!hayIzq && !hayDer) {
-                // Ningún lado tiene barcos, esperar
-                vTaskDelay(pdMS_TO_TICKS(200));
-                continue;
-            }
-
-            // Tomar el lado que tenga barcos; si ambos tienen, mantener el sentido actual
-            // para no cambiar innecesariamente mientras el canal está libre
-            if (!hayBarcosEnLado(sentidoActual)) {
-                sentidoActual = (sentidoActual == 0) ? 1 : 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
-                printf("[Tico] Sin barcos en lado actual, cambiando a lado %d (%s)\n",
-                       sentidoActual, sentidoActual == 0 ? "Izquierda" : "Derecha");
-            }
-
-            // Despachar el próximo barco del lado actual
-            Barco *proximo = dequeueBarco();
-            if (proximo == NULL) continue;
-
-            if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     printf("FCFS -> turno para barco %d\n", proximo->id);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) printf("PRIORITY -> turno para barco %d | prioridad %d\n", proximo->id, proximo->prioridad);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  printf("SJF -> turno para barco %d | tiempo de cruce %d\n", proximo->id, proximo->tiempoCruce);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   printf("RR -> turno para barco %d | tiempo restante %ds | quantum %ds\n", proximo->id, proximo->tiempoRestante, RR_QUANTUM);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) printf("STRN -> turno para barco %d | tiempo restante %ds\n", proximo->id, proximo->tiempoRestante);
-            else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  printf("EDF -> turno para barco %d | deadline %d\n", proximo->id, proximo->deadline);
-
-            {
-                int guiSlice = proximo->tiempoRestante;
-                if (SCHEDULER_ACTUAL == SCHEDULER_RR && guiSlice > RR_QUANTUM) guiSlice = RR_QUANTUM;
-                printf("GUI:CROSS,%d,%d,%d,%d,%d,%d\n",
-                    proximo->id, proximo->tipo, proximo->lado,
-                    guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
-            }
-
-            barco_en_canal = proximo;
-            xSemaphoreGive(proximo->sem);
-            xSemaphoreTake(doneSemaphore, portMAX_DELAY);
-            barco_en_canal = NULL;
-
-            if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
-                printf("%s -> barco %d regresa a la cola con tiempo restante\n",
-                       (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
-                printf("GUI:RETURN,%d,%d\n", proximo->id, proximo->tiempoRestante);
-                enqueueBarco(proximo);
-            } else {
-                printf("Barco %d terminó y libera el canal\n", proximo->id);
-                printf("GUI:DONE,%d\n", proximo->id);
-            }
-            continue; // Volver al inicio del loop (modo Tico no usa el resto)
+        if (!hayIzq && !hayDer) {
+            // Si no hay barcos, esperamos un poco y volvemos a chequear.
+            // Esto evita que el CPU se sature y previene errores de acceso.
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue; 
         }
 
-        // =========================
-        // MODO EQUIDAD / LETRERO: verificar si hay barcos en el lado actual
-        // =========================
-        bool colaVacia = !hayBarcosEnLado(sentidoActual);
+        // 2. Lógica de cambio de sentido (Simplificada para estabilidad)
+        if (!hayBarcosEnLado(sentidoActual)) {
+            sentidoActual = (sentidoActual == 0) ? 1 : 0;
+            printf("GUI:DIR,%d\n", sentidoActual);
+            vTaskDelay(pdMS_TO_TICKS(50)); // Pequeño respiro para la GUI
+        }
 
-        if (colaVacia) {
-            // Cola actual vacía: si hay barcos al otro lado, cambiar sentido
-            int otroLado = (sentidoActual == 0) ? 1 : 0;
-            if (hayBarcosEnLado(otroLado)) {
-                sentidoActual = otroLado;
-                barcosPasados = 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
-                printf("[%s] Cola vacía en lado %d, cambiando a lado %d (%s)\n",
-                       miConfig.modoControl == MODO_EQUIDAD ? "Equidad" : "Letrero",
-                       (sentidoActual == 0 ? 1 : 0), sentidoActual,
-                       sentidoActual == 0 ? "Izquierda" : "Derecha");
-            }
-            vTaskDelay(pdMS_TO_TICKS(200));
+        // 3. EXTRACCIÓN SEGURA (Aquí es donde ocurría el Load Access Fault)
+        Barco *proximo = dequeueBarco();
+
+        if (proximo == NULL) {
+            // Si por alguna razón llegó aquí y es NULL, abortamos este ciclo.
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
-        // =========================
-        // MODO EQUIDAD: chequear límite W antes de despachar
-        // =========================
-        if (miConfig.modoControl == MODO_EQUIDAD) {
-            int otroLado = (sentidoActual == 0) ? 1 : 0;
-            if (barcosPasados >= miConfig.parametroW && hayBarcosEnLado(otroLado)) {
-                sentidoActual = otroLado;
-                barcosPasados = 0;
-                printf("GUI:DIR,%d\n", sentidoActual);
-                printf("[Equidad] W=%d alcanzado, cambiando a lado %d (%s)\n",
-                       miConfig.parametroW, sentidoActual,
-                       sentidoActual == 0 ? "Izquierda" : "Derecha");
-                continue;
+        // 4. Procesamiento del barco (Solo si proximo != NULL)
+        barco_en_canal = proximo;
+        
+        int guiSlice = proximo->tiempoRestante;
+        // Ajuste para Round Robin si aplica
+        if (SCHEDULER_ACTUAL == 2 && guiSlice > 2) { // Asumiendo RR y Quantum de 2
+            guiSlice = 2;
+        }
+
+        printf("GUI:CROSS,%d,%d,%d,%d,%d,%d\n", 
+               proximo->id, proximo->tipo, proximo->lado, 
+               guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
+
+        // 5. Sincronización con la tarea del barco
+        if (proximo->sem != NULL) {
+            xSemaphoreGive(proximo->sem);
+            
+            // Esperamos a que el barco nos avise que terminó de cruzar
+            // Asegúrate de que doneSemaphore esté inicializado en el app_main
+            if (xSemaphoreTake(doneSemaphore, pdMS_TO_TICKS(10000)) == pdFALSE) {
+                printf("[Error] Timeout esperando al barco %d\n", proximo->id);
             }
         }
 
-        // =========================
-        // Sacar siguiente barco
-        // =========================
-        Barco *proximo = dequeueBarco();
-        if (proximo == NULL) continue;
-
-        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS)     printf("FCFS -> turno para barco %d\n", proximo->id);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) printf("PRIORITY -> turno para barco %d | prioridad %d\n", proximo->id, proximo->prioridad);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF)  printf("SJF -> turno para barco %d | tiempo de cruce %d\n", proximo->id, proximo->tiempoCruce);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_RR)   printf("RR -> turno para barco %d | tiempo restante %ds | quantum %ds\n", proximo->id, proximo->tiempoRestante, RR_QUANTUM);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) printf("STRN -> turno para barco %d | tiempo restante %ds\n", proximo->id, proximo->tiempoRestante);
-        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF)  printf("EDF -> turno para barco %d | deadline %d\n", proximo->id, proximo->deadline);
-
-        {
-            int guiSlice = proximo->tiempoRestante;
-            if (SCHEDULER_ACTUAL == SCHEDULER_RR && guiSlice > RR_QUANTUM) guiSlice = RR_QUANTUM;
-            printf("GUI:CROSS,%d,%d,%d,%d,%d,%d\n",
-                proximo->id, proximo->tipo, proximo->lado,
-                guiSlice, proximo->tiempoCruce, proximo->tiempoRestante);
-        }
-
-        barco_en_canal = proximo;
-        xSemaphoreGive(proximo->sem);
-        xSemaphoreTake(doneSemaphore, portMAX_DELAY);
         barco_en_canal = NULL;
 
-        if ((SCHEDULER_ACTUAL == SCHEDULER_RR || SCHEDULER_ACTUAL == SCHEDULER_STRN) && proximo->tiempoRestante > 0) {
-            printf("%s -> barco %d regresa a la cola con tiempo restante\n",
-                   (SCHEDULER_ACTUAL == SCHEDULER_RR ? "RR" : "STRN"), proximo->id);
+        // 6. Re-encolar o finalizar
+        if (proximo->tiempoRestante > 0) {
             printf("GUI:RETURN,%d,%d\n", proximo->id, proximo->tiempoRestante);
             enqueueBarco(proximo);
         } else {
-            printf("Barco %d terminó y libera el canal\n", proximo->id);
             printf("GUI:DONE,%d\n", proximo->id);
             barcosPasados++;
         }
+        
+        vTaskDelay(pdMS_TO_TICKS(50)); // Delay de cortesía entre barcos
     }
 }

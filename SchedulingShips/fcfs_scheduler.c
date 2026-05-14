@@ -46,6 +46,7 @@ bool fcfs_scheduler_dequeue(fcfs_scheduler_t *q, void **item) {
 
     // Obtener el item al frente de la cola
     *item = q->buffer[q->head];
+    q->buffer[q->head] = NULL; // Limpieza preventiva
     // Aritmética circular para el índice
     q->head = (q->head + 1) % FCFS_SCHEDULER_MAX_ITEMS;
     q->count--;

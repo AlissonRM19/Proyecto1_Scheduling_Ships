@@ -9,8 +9,15 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
+  canalMutex = xSemaphoreCreateMutex();
+
+  if (canalMutex == NULL) {
+        printf("Error: No se pudo crear el mutex del canal\n");
+  }
+  
   iniciarHardware();
   iniciarScheduler();
+ 
 
   
 
@@ -79,19 +86,14 @@ void loop() {
     }
   }
 
-  vTaskDelay(pdMS_TO_TICKS(10));
+  vTaskDelay(pdMS_TO_TICKS(100));
 
-  // Aquí después irá:
-  // ejecutarFCFS();
-  // ejecutarPrioridad();
-  // ejecutarRoundRobin();
-
-  delay(100);
+  delay(50);
 }
 
 void led_refresh_task(void *pvParameters) {
     while (1) {
         actualizar_tira_led(); // <--- Sin nada adentro
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(200));
     }
 }

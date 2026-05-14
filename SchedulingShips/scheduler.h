@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+extern SemaphoreHandle_t sem_espacio_canal;
+
 // Semáforo global para avisar que un barco terminó
 // En C puro, SemaphoreHandle_t ya está disponible por "semphr.h"
 extern SemaphoreHandle_t doneSemaphore;

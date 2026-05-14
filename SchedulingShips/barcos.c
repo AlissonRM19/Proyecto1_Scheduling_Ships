@@ -4,10 +4,15 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "barcos.h"
+#include "hardware.h"
 #include "config.h"
 #include "scheduler.h"
 
 int contadorBarcos = 1;
+
+extern int barcos_en_canal_count;
+extern int sentido_actual;
+extern SemaphoreHandle_t flujoMutex;
 
 // Funciones auxiliares para imprimir tipo y lado de los barcos
 const char* nombreTipo(int tipo) {
@@ -38,45 +43,88 @@ void barcoTask(void *pvParameters) {
 
     // El barco espera a ser programado y luego comienza a cruzar
     while (barco->tiempoRestante > 0) {
+        // 1. Esperamos permiso del Scheduler (Turno de CPU)
         xSemaphoreTake(barco->sem, portMAX_DELAY);
 
-        int slice = barco->tiempoRestante;
+        // --- PROTOCOLO DE ENTRADA AL CANAL (RECURSO CRÍTICO) ---
+        bool puedeEntrar = false;
+        while (!puedeEntrar) {
+            xSemaphoreTake(flujoMutex, portMAX_DELAY);
+            
+            // Si el canal está vacío, el primero que llega establece el sentido
+            if (barcos_en_canal_count == 0) {
+                sentido_actual = barco->lado;
+                puedeEntrar = true;
+            } 
+            // Si hay barcos, solo entra si van en su misma dirección
+            else if (sentido_actual == barco->lado) {
+                puedeEntrar = true;
+            }
+            
+            if (puedeEntrar) {
+                barcos_en_canal_count++;
+            }
+            
+            xSemaphoreGive(flujoMutex);
 
-        // Si el scheduler actual es Round Robin, limitamos el slice al quantum definido
+            if (!puedeEntrar) {
+                // Si el canal está bloqueado por el sentido opuesto, 
+                // esperamos un poco para no saturar el procesador
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        // --- INICIO DEL CRUCE ---
+        int slice = barco->tiempoRestante;
         if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
             slice = RR_QUANTUM;
         }
 
-        printf("Barco %d comienza a cruzar el canal...\n", barco->id);
+        registrarBarcoEnCanal(barco);
+        printf("Barco %d entrando al canal (Sentido: %d)\n", barco->id, sentido_actual);
 
-        // --- LÓGICA DE MOVIMIENTO LED ---
-        if (barco->lado == 0) { // Viene de IZQ a DER
+        int delayMovimiento = (miConfig.velocidadBarco / 5); 
+
+        if (barco->lado == 0) { // IZQ -> DER
             for (int p = 4; p <= 8; p++) {
                 barco->posicion = p;
-                // Usamos una fracción del tiempo de cruce para cada paso de LED
-                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5)); 
+                actualizar_tira_led();
+                vTaskDelay(pdMS_TO_TICKS(delayMovimiento)); 
             }
-        } else { // Viene de DER a IZQ
+        } else { // DER -> IZQ
             for (int p = 8; p >= 4; p--) {
                 barco->posicion = p;
-                vTaskDelay(pdMS_TO_TICKS(miConfig.velocidadBarco / 5));
+                actualizar_tira_led();
+                vTaskDelay(pdMS_TO_TICKS(delayMovimiento));
             }
         }
 
-        vTaskDelay(slice * 1000 / portTICK_PERIOD_MS);
+        // --- PROTOCOLO DE SALIDA DEL CANAL ---
+        desregistrarBarcoEnCanal(barco);
+        
+        xSemaphoreTake(flujoMutex, portMAX_DELAY);
+        barcos_en_canal_count--;
+        if (barcos_en_canal_count == 0) {
+            sentido_actual = -1; // Canal totalmente libre
+        }
+        xSemaphoreGive(flujoMutex);
 
-        barco->tiempoRestante -= slice;
-
-        if (barco->tiempoRestante > 0) {
-            printf("Barco %d pausa, quedan %ds\n", barco->id, barco->tiempoRestante);
-        } else {
+        // --- LÓGICA DE TIEMPO RESTANTE ---
+        if (barco->tiempoRestante <= slice) { 
+            barco->tiempoRestante = 0;
             printf("Barco %d completó el cruce!\n", barco->id);
+        } else {
+            barco->tiempoRestante -= slice;
+            printf("Barco %d pausa (Quantum), restan %ds\n", barco->id, barco->tiempoRestante);
         }
 
+        xSemaphoreGive(sem_espacio_canal);
+        actualizar_tira_led(); 
+
+        // 4. Avisamos al scheduler que nuestra ráfaga terminó
         xSemaphoreGive(doneSemaphore);
     }
 
-    // Limpieza y eliminación de la tarea
     vSemaphoreDelete(barco->sem);
     free(barco);
     vTaskDelete(NULL);
@@ -92,7 +140,7 @@ void crearBarco(int tipo, int lado) {
         printf("Error reservando memoria\n");
         return;
     }
-    nuevoBarco->posicion = (lado == 0) ? 0 : 12; // Espera en los extremos
+    nuevoBarco->posicion = (lado == 0) ? 0 : 11; // Espera en los extremos
 
     // Inicialización del barco
     // Asignamos un ID único al barco y configuramos sus atributos según el tipo

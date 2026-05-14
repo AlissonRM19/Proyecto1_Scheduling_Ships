@@ -36,7 +36,17 @@ extern edf_scheduler_t edf_Izq, edf_Der;
 #define FIN_IZQ 3
 #define INICIO_CANAL 4
 #define FIN_CANAL 9
+#define INICIO_DER 10
 #define FIN_DER 13
+
+SemaphoreHandle_t canalMutex = NULL;
+Barco* barcos_activos[MAX_BARCOS_CANAL] = {NULL};
+
+// Variables de control de acceso al recurso crítico (El Canal)
+int barcos_en_canal_count = 0;
+int sentido_actual = -1; // -1: Libre, 0: Izquierda, 1: Derecha
+SemaphoreHandle_t flujoMutex = NULL;
+
 
 // Función auxiliar para configurar los pines de entrada
 static void configurar_boton(int pin) {
@@ -56,6 +66,9 @@ void iniciarHardware() {
     configurar_boton(BOTON_PESQUERO_DER);
     configurar_boton(BOTON_PATRULLA_DER);
 
+    if (flujoMutex == NULL) {
+            flujoMutex = xSemaphoreCreateMutex();
+    }
     // Inicializar el wrapper de los LEDs (definido en led_wrapper.cpp)
     led_init(); 
 }
@@ -123,22 +136,70 @@ void actualizar_tira_led() {
     }
 
     // --- SECCIÓN 2: EL CANAL (LEDs 5 al 10) ---
-    if (barco_en_canal != NULL) {
-        int r = 0, g = 0, b = 0;
-        // Aquí SÍ usamos el color real porque tenemos el puntero al barco
-        if (barco_en_canal->tipo == 1) b = 255;      // Normal -> Azul
-        else if (barco_en_canal->tipo == 2) g = 255; // Pesquero -> Verde
-        else if (barco_en_canal->tipo == 3) r = 255; // Patrulla -> Rojo
+    if (xSemaphoreTake(canalMutex, 0) == pdTRUE) { 
+        for (int i = 0; i < MAX_BARCOS_CANAL; i++) {
+            Barco* b = barcos_activos[i];
+            if (b != NULL) {
+                // DECLARAMOS Y ASIGNAMOS LOS COLORES AQUÍ
+                int red = 0, green = 0, blue = 0;
+                
+                if (b->tipo == 1) blue = 255;      // Normal -> Azul
+                else if (b->tipo == 2) green = 255; // Pesquero -> Verde
+                else if (b->tipo == 3) red = 255;   // Patrulla -> Rojo
 
-        led_set_pixel(barco_en_canal->posicion, r, g, b);
+                // Pintamos el barco en su posición actual
+                led_set_pixel(b->posicion, red, green, blue);
+            }
+            
+//        printf("DEBUG: Barco %d está en barcos_activos con posición %d\n", 
+//            barcos_activos[i]->id, barcos_activos[i]->posicion);
+//        }
+        }
+        xSemaphoreGive(canalMutex);
     }
-
-    // --- SECCIÓN 3: OCÉANO DERECHO (LEDs 11 al 14) ---
+    
+    // --- SECCIÓN 3: OCÉANO DERECHO (LEDs 10 al 13) ---
     for (int i = 0; i < esperandoDer && i < 4; i++) {
-        led_set_pixel(14 - i, 0, 150, 150); 
+        int r = 0, g = 0, b = 0;
+        Barco* bEnEspera = NULL;
+        int indiceReal = 0;
+    
+        if (SCHEDULER_ACTUAL == SCHEDULER_FCFS) {
+            // USAR Der.head AQUÍ
+            indiceReal = (fcfs_Der.head + i) % FCFS_SCHEDULER_MAX_ITEMS;
+            bEnEspera = (Barco*)fcfs_Der.buffer[indiceReal];
+        } 
+        else if (SCHEDULER_ACTUAL == SCHEDULER_RR) {
+            // USAR Der.head AQUÍ
+            indiceReal = (rr_Der.head + i) % RR_SCHEDULER_MAX_ITEMS;
+            bEnEspera = (Barco*)rr_Der.buffer[indiceReal];
+        }
+        else if (SCHEDULER_ACTUAL == SCHEDULER_EDF) {
+            bEnEspera = (Barco*)edf_Der.buffer[i];
+        } 
+        else if (SCHEDULER_ACTUAL == SCHEDULER_SJF) {
+            bEnEspera = (Barco*)sjf_Der.buffer[i];
+        } 
+        else if (SCHEDULER_ACTUAL == SCHEDULER_STRN) {
+            bEnEspera = (Barco*)strn_Der.buffer[i];
+        } 
+        else if (SCHEDULER_ACTUAL == SCHEDULER_PRIORITY) {
+            bEnEspera = (Barco*)prio_Der.buffer[i];
+        }
+    
+        if (bEnEspera != NULL) {
+            if (bEnEspera->tipo == 1) b = 255;      // Azul
+            else if (bEnEspera->tipo == 2) g = 255; // Verde
+            else if (bEnEspera->tipo == 3) r = 255; // Rojo
+            
+            // CORRECCIÓN: Pintar en el rango 11-14
+            // 14 es el extremo derecho, 11 es el que está pegado al canal
+            led_set_pixel(13 - i, r, g, b); 
+        }
     }
 
     led_show(); // Mostramos todo el paquete de una vez
+
 }
 
 void leerBotones() {
@@ -172,5 +233,36 @@ void leerBotones() {
             crearBarco(botones[i].tipo, botones[i].lado);
             vTaskDelay(pdMS_TO_TICKS(500));
         }
+    }
+}
+
+void registrarBarcoEnCanal(Barco* b) {
+    if (xSemaphoreTake(canalMutex, portMAX_DELAY) == pdTRUE) {
+        for (int i = 0; i < MAX_BARCOS_CANAL; i++) {
+            if (barcos_activos[i] == NULL) {
+                barcos_activos[i] = b;
+                break;
+            }
+        }
+        xSemaphoreGive(canalMutex);
+    }
+}
+
+void desregistrarBarcoEnCanal(Barco* b) {
+    if (xSemaphoreTake(canalMutex, portMAX_DELAY) == pdTRUE) {
+        for (int i = 0; i < MAX_BARCOS_CANAL; i++) {
+            if (barcos_activos[i] == b) {
+                barcos_activos[i] = NULL;
+                break;
+            }
+        }
+        xSemaphoreGive(canalMutex);
+    }
+}
+
+void hardwareTask(void *pvParameters) {
+    while(1) {
+        actualizar_tira_led();
+        vTaskDelay(pdMS_TO_TICKS(50)); // 20 FPS es más que suficiente y estable
     }
 }
