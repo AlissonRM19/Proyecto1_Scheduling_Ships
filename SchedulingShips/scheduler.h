@@ -1,30 +1,28 @@
-#ifndef SCHEDULER_H
+#ifndef SCHEDULER_H  // Guardia de inclusión
 #define SCHEDULER_H
 
-// Sustituimos Arduino.h por las cabeceras nativas de FreeRTOS
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "barcos.h"
+#include "freertos/FreeRTOS.h"  // Incluir FreeRTOS
+#include "freertos/semphr.h"  // Incluir semáforos
+#include "barcos.h"  // Incluir barcos
 
 #ifdef __cplusplus
-extern "C" {
+extern "C" {  // Declarar como extern C si en C++
 #endif
 
 // Semáforo global para avisar que un barco terminó
-// En C puro, SemaphoreHandle_t ya está disponible por "semphr.h"
 extern SemaphoreHandle_t doneSemaphore;
 
 // Inicializa el scheduler seleccionado + task principal
 void iniciarScheduler();
 
-// Operaciones de cola (C puro)
-bool enqueueBarco(Barco *barco);
-Barco* dequeueBarco();
+// Operaciones de cola
+bool enqueueBarco(Barco *barco);  // Encolar barco
+Barco* dequeueBarco();  // Desencolar barco
 
-void letreroTask(void *pvParameters);
+void letreroTask(void *pvParameters);  // Tarea del letrero
 
 // Task principal del scheduler
-void schedulerTask(void *pvParameters);
+void schedulerTask(void *pvParameters);  // Tarea principal del scheduler
 
 #ifdef __cplusplus
 }
