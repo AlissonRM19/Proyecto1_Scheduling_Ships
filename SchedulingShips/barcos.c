@@ -1,195 +1,185 @@
-#include <stdio.h>      // Para printf
-#include <stdlib.h>     // Para malloc y free
+#include <stdio.h>
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "barcos.h"
+#include "canal.h"
 #include "config.h"
 #include "scheduler.h"
 
 int contadorBarcos = 1;
 
-#define MAX_BARCOS_CANAL 5
+extern int                barcos_en_canal_count;
+extern int                sentido_actual;
+extern Barco*             barcos_activos[MAX_BARCOS_CANAL];
+extern SemaphoreHandle_t  sem_espacio_canal;
+extern SemaphoreHandle_t  doneSemaphore;
 
-// Funciones auxiliares para imprimir tipo y lado de los barcos
 const char* nombreTipo(int tipo) {
-    if (tipo == 1) return "Normal";
-    if (tipo == 2) return "Pesquero";
-    if (tipo == 3) return "Patrulla";
-    return "Desconocido";
+    switch (tipo) {
+        case 1:  return "Normal";
+        case 2:  return "Pesquero";
+        case 3:  return "Patrulla";
+        default: return "Desconocido";
+    }
 }
 
-// Función para convertir el lado a un nombre legible
 const char* nombreLado(int lado) {
-    if (lado == 0) return "Izquierda";
-    return "Derecha";
+    return (lado == 0) ? "Izquierda" : "Derecha";
 }
 
 // ===== TAREA DEL BARCO =====
 void barcoTask(void *pvParameters) {
-    Barco *barco = (Barco *) pvParameters;
+    Barco *barco      = (Barco *) pvParameters;
     int slot_asignado = -1;
 
-    // Referencias a variables definidas en otro archivo (Linker las buscará)
-    extern int barcos_en_canal_count;
-    extern int sentido_actual;
-    extern Barco* barcos_activos[MAX_BARCOS_CANAL];
-    extern SemaphoreHandle_t sem_espacio_canal;
-    extern SemaphoreHandle_t doneSemaphore;
+    xSemaphoreTake(barco->sem, portMAX_DELAY);
 
-    xSemaphoreTake(barco->sem, portMAX_DELAY); 
-
-    // Registrar en el canal
     for (int i = 0; i < MAX_BARCOS_CANAL; i++) {
         if (barcos_activos[i] == NULL) {
             barcos_activos[i] = barco;
-            slot_asignado = i;
+            slot_asignado     = i;
             break;
         }
     }
 
-    barcos_en_canal_count++;
-    sentido_actual = barco->lado;
+    printf("[Barco %d] %s desde %s entra al canal\n",
+           barco->id, nombreTipo(barco->tipo), nombreLado(barco->lado));
 
-    // --- LÓGICA DE CRUCE (Soporta RR y Pipeline) ---
-    // --- LÓGICA DE CRUCE VISUAL ---
     while (barco->tiempoRestante > 0) {
-    
-        // RR espera permiso nuevamente
+
+        // RR/STRN: esperar re-despacho tras cada slice
         if (barco->tiempoRestante < barco->tiempoCruce) {
             xSemaphoreTake(barco->sem, portMAX_DELAY);
         }
-    
+
         int slice = barco->tiempoRestante;
-    
         if (SCHEDULER_ACTUAL == SCHEDULER_RR && slice > RR_QUANTUM) {
             slice = RR_QUANTUM;
         }
-    
-        // LEDs reales del canal
-        int inicio;
-        int fin;
-        int paso;
-    
-        if (barco->lado == 0) {
-            // IZQ -> DER
-            inicio = 5;
-            fin = 10;
-            paso = 1;
-        } else {
-            // DER -> IZQ
-            inicio = 10;
-            fin = 5;
-            paso = -1;
+
+        // Dirección: LEDs reales 6..10
+        int led_inicio, led_fin, paso;
+        if (barco->lado == 0) {        // Izquierda → Derecha
+            led_inicio = LED_CANAL_INICIO;  // 6
+            led_fin    = LED_CANAL_FIN;     // 10
+            paso       = 1;
+        } else {                        // Derecha → Izquierda
+            led_inicio = LED_CANAL_FIN;     // 10
+            led_fin    = LED_CANAL_INICIO;  // 6
+            paso       = -1;
         }
-    
-        // Cantidad total de LEDs del canal
-        int total_leds = 5;
-    
-        // Tiempo por LED
-        int delay_por_led = (slice * 1000) / total_leds;
-    
-        // Movimiento visual
-        for (int p = inicio;
-             (paso == 1) ? (p <= fin) : (p >= fin);
-             p += paso) {
-    
-            barco->posicion = p;
-    
+
+        // Tiempo por LED según velocidad propia del barco
+        int delay_por_led = (barco->tiempoCruce * 1000) / LED_CANAL_TOTAL;
+
+        // LEDs a recorrer en este slice (para RR/STRN parciales)
+        int leds_en_slice = (LED_CANAL_TOTAL * slice) / barco->tiempoCruce;
+        if (leds_en_slice < 1) leds_en_slice = 1;
+        if (leds_en_slice > LED_CANAL_TOTAL) leds_en_slice = LED_CANAL_TOTAL;
+
+        // LED de inicio de este slice:
+        // - Primer slice: empieza en led_inicio (6 o 10)
+        // - Slices siguientes RR/STRN: continúa desde donde quedó
+        int led_actual = (barco->tiempoRestante == barco->tiempoCruce)
+                         ? led_inicio
+                         : barco->posicion;
+
+        // Ocupar primer LED antes de entrar al canal
+        canal_ocupar_posicion(canal_pos_a_index(led_actual));
+        barco->posicion = led_actual;
+        printf("GUI:POS,%d,%d\n", barco->id, barco->posicion);
+
+        for (int s = 0; s < leds_en_slice; s++) {
+
             vTaskDelay(pdMS_TO_TICKS(delay_por_led));
+
+            int led_siguiente = led_actual + paso;
+            bool hay_siguiente = (paso == 1)
+                                  ? (led_siguiente <= led_fin)
+                                  : (led_siguiente >= led_fin);
+
+            if (hay_siguiente) {
+                // Ocupar siguiente ANTES de liberar actual
+                // Si hay un barco más lento adelante, bloquea aquí hasta que avance
+                canal_ocupar_posicion(canal_pos_a_index(led_siguiente));
+                canal_liberar_posicion(canal_pos_a_index(led_actual));
+
+                led_actual      = led_siguiente;
+                barco->posicion = led_actual;  // LED real para hardware.c
+                printf("GUI:POS,%d,%d\n", barco->id, barco->posicion);
+            } else {
+                // Último LED: liberar y salir
+                canal_liberar_posicion(canal_pos_a_index(led_actual));
+            }
         }
-    
+
         barco->tiempoRestante -= slice;
-    
-        // Avisar scheduler
         xSemaphoreGive(doneSemaphore);
     }
 
     printf("GUI:DONE,%d\n", barco->id);
-    
+    printf("[Barco %d] Cruce completado\n", barco->id);
+
     if (slot_asignado != -1) {
         barcos_activos[slot_asignado] = NULL;
     }
 
-    barcos_en_canal_count--; // <--- Aquí es donde fallaba el Linker
-
-    if (sem_espacio_canal != NULL) {
-        xSemaphoreGive(sem_espacio_canal);
-    }
+    barcos_en_canal_count--;
+    xSemaphoreGive(sem_espacio_canal);
 
     vSemaphoreDelete(barco->sem);
     free(barco);
     vTaskDelete(NULL);
 }
 
-
-
 // ===== CREAR BARCO =====
-// Esta función se llama desde la tarea generadora para crear un nuevo barco y agregarlo al scheduler
 void crearBarco(int tipo, int lado) {
     Barco *nuevoBarco = (Barco*) malloc(sizeof(Barco));
-
-    // Verificación de memoria
     if (nuevoBarco == NULL) {
-        printf("Error reservando memoria\n");
+        printf("[ERROR] Sin memoria para barco\n");
         return;
     }
-    nuevoBarco->posicion = (lado == 0) ? 4 : 11; // Espera en los extremos
 
-    // Inicialización del barco
-    // Asignamos un ID único al barco y configuramos sus atributos según el tipo
-    nuevoBarco->id = contadorBarcos++;
-    nuevoBarco->tipo = tipo;
-    nuevoBarco->lado = lado;
+    // Posición inicial: LED 4 (barrera izq) o LED 12 (inicio océano der)
+    // Solo referencial, hardware.c no pinta esta posición en el canal
+    nuevoBarco->posicion = (lado == 0) ? 4 : 12;
+    nuevoBarco->id       = contadorBarcos++;
+    nuevoBarco->tipo     = tipo;
+    nuevoBarco->lado     = lado;
 
-    // Crear un semáforo binario para que el barco espere a ser programado
     nuevoBarco->sem = xSemaphoreCreateBinary();
-
     if (nuevoBarco->sem == NULL) {
-        printf("Error creando semaforo\n");
+        printf("[ERROR] Sin semáforo para barco\n");
         free(nuevoBarco);
         return;
     }
 
-    // Configuración de tiempo de cruce y prioridad según el tipo de barco
-    if (tipo == 1) {
-        nuevoBarco->tiempoCruce = 5;
-        nuevoBarco->prioridad = 1;
-    } else if (tipo == 2) {
-        nuevoBarco->tiempoCruce = 4;
-        nuevoBarco->prioridad = 2;
-    } else if (tipo == 3) {
-        nuevoBarco->tiempoCruce = 2;
-        nuevoBarco->prioridad = 3;
+    switch (tipo) {
+        case 1: nuevoBarco->tiempoCruce = 5; nuevoBarco->prioridad = 1; break;
+        case 2: nuevoBarco->tiempoCruce = 4; nuevoBarco->prioridad = 2; break;
+        case 3: nuevoBarco->tiempoCruce = 2; nuevoBarco->prioridad = 3; break;
+        default: nuevoBarco->tiempoCruce = 5; nuevoBarco->prioridad = 1; break;
     }
-    
 
-    // El tiempo restante inicialmente es igual al tiempo de cruce total
     nuevoBarco->tiempoRestante = nuevoBarco->tiempoCruce;
-    // Asignamos un deadline aleatorio para el EDF (entre 10 y 30 segundos a partir del momento actual)
-    nuevoBarco->deadline = (int)(pdTICKS_TO_MS(xTaskGetTickCount()) / 1000) + (rand() % 20 + 10);
+    nuevoBarco->deadline       = (int)(pdTICKS_TO_MS(xTaskGetTickCount()) / 1000)
+                                 + (rand() % 20 + 10);
 
-    // Agregar el barco al scheduler
     if (!enqueueBarco(nuevoBarco)) {
-        printf("Cola llena\n");
+        printf("[WARN] Cola llena, barco %d descartado\n", nuevoBarco->id);
         vSemaphoreDelete(nuevoBarco->sem);
         free(nuevoBarco);
         return;
     }
 
-    printf("Barco %d agregado al scheduler\n", nuevoBarco->id);
-    /* Mensaje estructurado para la GUI */
+    printf("Barco %d agregado | tipo: %s | lado: %s\n",
+           nuevoBarco->id, nombreTipo(tipo), nombreLado(lado));
     printf("GUI:ADD,%d,%d,%d,%d,%d,%d\n",
-        nuevoBarco->id, nuevoBarco->tipo, nuevoBarco->lado,
-        nuevoBarco->prioridad, nuevoBarco->tiempoRestante, nuevoBarco->deadline);
+           nuevoBarco->id, nuevoBarco->tipo, nuevoBarco->lado,
+           nuevoBarco->prioridad, nuevoBarco->tiempoRestante, nuevoBarco->deadline);
 
-    // Crear la tarea para el barco
-    xTaskCreate(
-        barcoTask,
-        "Barco",
-        4096,
-        nuevoBarco,
-        nuevoBarco->prioridad,
-        NULL
-    );
+    UBaseType_t taskPriority = (tipo == 3) ? 5 : (tipo == 2) ? 2 : 1;
+    xTaskCreate(barcoTask, "Barco", 4096, nuevoBarco, taskPriority, NULL);
 }
