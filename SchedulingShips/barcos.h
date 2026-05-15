@@ -22,6 +22,7 @@ typedef struct {
 void crearBarco(int tipo, int lado);
 void barcoTask(void *pvParameters);
 
+
 #ifdef __cplusplus
 }
 #endif
